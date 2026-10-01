@@ -42,7 +42,7 @@ export function showSignIn(root, onSignedIn) {
         <input id="code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••••" required>
         ${error ? `<p class="err" role="alert">${esc(error)}</p>` : ""}
         <button class="big" type="submit" ${busy ? "disabled" : ""}>${busy ? "Signing in…" : "Sign in"}</button>
-        <p class="hint">Can't find it? Check your spam folder. Codes expire after an hour.</p>
+        <p class="hint">Enter the code from the email, or just tap the sign-in link in it. Can't find it? Check your spam folder.</p>
         <button class="linkbtn" type="button" id="resend">Send a new code</button>
         <button class="linkbtn" type="button" id="back">Use a different email</button>
       </form>`
