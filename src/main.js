@@ -1,5 +1,5 @@
 import "./base.css";
-import { api, ready } from "./lib/store.js";
+import { api, ready, setupError } from "./lib/store.js";
 import { showSignIn } from "./auth.js";
 import { esc } from "./lib/util.js";
 
@@ -11,12 +11,22 @@ function message(title, body, withSignOut) {
   if (withSignOut) root.querySelector("#so").onclick = async () => { await api.signOut(); boot(); };
 }
 
+function showError(detail) {
+  message("Something went wrong", `The app couldn't start. Send Karina's developer this message:<br><code style="display:block;margin-top:8px;font-size:13px;word-break:break-word">${esc(detail)}</code>`, false);
+}
+window.addEventListener("error", e => showError(e.message || "Script error"));
+window.addEventListener("unhandledrejection", e => showError(e.reason?.message || String(e.reason)));
+
 async function boot() {
+  if (setupError) { message("Settings need a fix", `The Supabase settings in Cloudflare look wrong.<br><code style="display:block;margin-top:8px;font-size:13px;word-break:break-word">${esc(setupError)}</code>`); return; }
   if (!ready) {
     message("Almost there", "The app isn't connected to its database yet. Add the Supabase keys in Cloudflare (see SETUP.md).");
     return;
   }
-  const user = await api.user();
+  const slow = setTimeout(() => message("Still connecting…", "This is taking longer than usual. Check your internet connection, then reload the page."), 12000);
+  let user;
+  try { user = await api.user(); } catch (err) { clearTimeout(slow); showError(err.message || String(err)); return; }
+  clearTimeout(slow);
   if (!user) { showSignIn(root, boot); return; }
   let who;
   try { who = await api.whoami(); }
