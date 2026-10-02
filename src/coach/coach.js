@@ -116,7 +116,7 @@ export function start(root, { onSignOut }) {
       .filter(s => !q || String(s.name).toLowerCase().includes(q));
     const unread = unreadCount();
     return `<aside class="roster" aria-label="Students">
-      <div class="brand"><span class="eyebrow">Karina Sánchez Golf</span><h1>Student Practice Hub</h1></div>
+      <div class="brand"><span class="eyebrow">Karina Sánchez Golf</span><h1>Golfers Practice Hub</h1></div>
       <button class="nav-btn" data-view="checkin" aria-current="${S.view === "checkin"}">This week's check-in ${unread ? `<span class="badge" title="New notes from students">${unread}</span>` : ""}</button>
       <input id="search" class="search" type="search" placeholder="Search students" aria-label="Search students" value="${esc(S.q)}">
       <div class="filters" role="group" aria-label="Filter">${["All", "Junior", "Adult"].map(f => `<button class="chip" data-filter="${f}" aria-pressed="${S.filter === f}">${f === "All" ? "All" : f + "s"}</button>`).join("")}</div>
@@ -176,7 +176,7 @@ export function start(root, { onSignOut }) {
     const plans = S.week.plans.filter(p => p.student_id === s.id && !p.done).sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day));
     const first = String(s.name).split(/\s+/)[0];
     const lines = plans.slice(0, 5).map(p => `• ${p.day}: ${p.title}${p.minutes ? ` (${p.minutes} min)` : ""}`).join("\n");
-    return `Hi ${first}! Quick nudge from Karina. Here's what's left on your practice plan this week:\n${lines || "• Check the app for this week's plan"}\n\nTick things off in the Practice Hub as you go so I can see how it's going before our next lesson.`;
+    return `Hi ${first}! Quick nudge from Karina. Here's what's left on your practice plan this week:\n${lines || "• Check the app for this week's plan"}\n\nTick things off in Golfers Practice Hub as you go so I can see how it's going before our next lesson.`;
   }
 
   // ---------- student space
@@ -212,8 +212,8 @@ export function start(root, { onSignOut }) {
   function inviteText(s, email) {
     const first = String(s.name).split(/\s+/)[0];
     return s.grp === "Junior" && s.guardian_email
-      ? `Hi! ${first}'s practice plan, drills and lesson notes now live in my Student Practice Hub:\n${appUrl()}\n\nSign in with ${email}. You'll get a 6-digit code by email, with no password needed. On iPhone, tap Share → "Add to Home Screen" to keep it like an app.\n\n– Karina`
-      : `Hi ${first}! Your practice plan, drills and lesson notes now live in my Student Practice Hub:\n${appUrl()}\n\nSign in with ${email}. You'll get a 6-digit code by email, with no password needed. On iPhone, tap Share → "Add to Home Screen" to keep it like an app.\n\n– Karina`;
+      ? `Hi! ${first}'s practice plan, drills and lesson notes now live in my Golfers Practice Hub:\n${appUrl()}\n\nSign in with ${email}. You'll get a 6-digit code by email, with no password needed. On iPhone, tap Share → "Add to Home Screen" to keep it like an app.\n\n– Karina`
+      : `Hi ${first}! Your practice plan, drills and lesson notes now live in my Golfers Practice Hub:\n${appUrl()}\n\nSign in with ${email}. You'll get a 6-digit code by email, with no password needed. On iPhone, tap Share → "Add to Home Screen" to keep it like an app.\n\n– Karina`;
   }
 
   function overview(s) {

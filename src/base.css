@@ -42,7 +42,7 @@ a{color:var(--pine)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:calc(100% - 32px);text-align:center;box-shadow:var(--shadow)}
 
 /* sign in */
-.auth{min-height:100%;display:flex;flex-direction:column;justify-content:space-between;gap:32px;padding:calc(48px + env(safe-area-inset-top,0px)) 20px calc(28px + env(safe-area-inset-bottom,0px));background:var(--hero);color:var(--hero-ink)}
+.auth{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:space-between;gap:32px;padding:calc(48px + env(safe-area-inset-top,0px)) 20px calc(28px + env(safe-area-inset-bottom,0px));background:var(--hero);color:var(--hero-ink)}
 .auth-inner{width:100%;max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:32px;flex:1;justify-content:space-between}
 .auth .mark{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;opacity:.85}
 .auth h1{font-family:var(--display);font-size:52px;line-height:.95;margin:10px 0 0;font-weight:700}
@@ -78,3 +78,5 @@ a{color:var(--pine)}
 .vbar{height:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
 .vbar i{display:block;height:100%;background:var(--pine);transition:width .2s}
 .verr{margin:0;font-size:13px;color:var(--bad)}
+.auth .quote{margin:22px 0 0;font-size:17px;line-height:1.45;max-width:30ch;font-weight:500}
+.auth .quote span{display:block;margin-top:6px;font-size:13px;font-weight:600;opacity:.8}

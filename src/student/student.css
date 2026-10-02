@@ -107,3 +107,7 @@ textarea{min-height:72px;resize:vertical}
 .menu-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);font-weight:600;text-align:left;width:100%}
 .menu-item[aria-current="true"]{border-color:var(--pine);background:var(--pine-soft)}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+.thought{border-left:4px solid var(--flag);background:var(--surface);border-radius:4px 14px 14px 4px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.thought span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.thought p{margin:0;font-size:16px;font-weight:600;line-height:1.4}
+.thought small{color:var(--ink-3);font-size:12px}
