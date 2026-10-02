@@ -2,7 +2,7 @@ import "./student.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
-import { DAYS, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
+import { logo, DAYS, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
 
 const ICON = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>',
@@ -56,7 +56,7 @@ export function start(root, { students, onSignOut }) {
 
   // ---------- pieces
   function top(title, sub) {
-    return `<header class="s-top"><div><div class="hello">${esc(sub)}</div><h1>${esc(title)}</h1></div>
+    return `<header class="s-top">${logo("s-logo")}<div style="flex:1;min-width:0"><div class="hello">${esc(sub)}</div><h1>${esc(title)}</h1></div>
       <button class="av" data-act="menu" aria-label="Account and settings">${esc(initials(S.profile?.name))}</button></header>`;
   }
   function task(p) {

@@ -80,3 +80,8 @@ a{color:var(--pine)}
 .verr{margin:0;font-size:13px;color:var(--bad)}
 .auth .quote{margin:22px 0 0;font-size:17px;line-height:1.45;max-width:30ch;font-weight:500}
 .auth .quote span{display:block;margin-top:6px;font-size:13px;font-weight:600;opacity:.8}
+.logo,.auth-logo,.s-logo,.c-logo{display:block;flex:none;color:inherit}
+.auth-logo{height:72px;width:auto;margin-bottom:18px;color:var(--hero-ink)}
+.auth-logo path,.s-logo path,.c-logo path{stroke:currentColor;stroke-width:.6;stroke-linejoin:round}
+.s-logo{height:40px;width:auto;color:var(--ink)}
+.c-logo{height:52px;width:auto;color:var(--ink)}

@@ -1,5 +1,5 @@
 import { api } from "./lib/store.js";
-import { esc, friendly } from "./lib/util.js";
+import { esc, friendly, logo } from "./lib/util.js";
 import { quoteOfTheDay } from "./lib/quotes.js";
 
 // Two screens: enter email, then enter the code from the email.
@@ -9,7 +9,7 @@ export function showSignIn(root, onSignedIn) {
   let busy = false;
 
   const shell = inner => `<div class="auth"><div class="auth-inner">
-    <div><div class="mark">Karina Sánchez Golf</div><h1>${inner.title}</h1><div class="flagline"></div><p class="quote">“${esc(quoteOfTheDay())}”<span>– Karina</span></p></div>
+    <div>${logo("auth-logo")}<div class="mark">Karina Sánchez Golf</div><h1>${inner.title}</h1><div class="flagline"></div><p class="quote">“${esc(quoteOfTheDay())}”<span>– Karina</span></p></div>
     ${inner.card}</div></div>`;
 
   function emailScreen() {

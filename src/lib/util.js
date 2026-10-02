@@ -1,3 +1,4 @@
+import LOGO from "../logo.svg?raw";
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const AREAS = [
@@ -76,3 +77,7 @@ export function friendly(err) {
   if (/Failed to fetch|NetworkError/i.test(m)) return "No connection. Check your internet and try again.";
   return "Something went wrong. Try again.";
 }
+
+// Karina's KSG monogram, coloured by the surrounding text colour.
+export const logo = (cls = "logo", label = "Karina Sánchez Golf") =>
+  LOGO.replace("<svg ", `<svg class="${cls}" role="img" aria-label="${label}" `);
