@@ -32,6 +32,17 @@ export async function openPlayer(pid) {
     if (r.status === 412 || r.status === 404) ready = false;
   } catch { /* network hiccup: try the player anyway */ }
   if (!ready) { say("This video is still processing. Try again in a few minutes."); return; }
+  // The phone's own player, used as a fallback when the Mux player can't decode a stream.
+  const native = () => {
+    const v = document.createElement("video");
+    v.controls = true; v.playsInline = true; v.autoplay = true; v.preload = "auto";
+    v.src = `https://stream.mux.com/${encodeURIComponent(pid)}.m3u8`;
+    v.poster = thumbUrl(pid);
+    v.style.width = "100%"; v.style.maxHeight = "80vh"; v.style.background = "#000";
+    v.onerror = () => say("This video can't play on this device. Try opening the app in Safari or Chrome, or on another phone.");
+    stage.replaceChildren(v);
+  };
+  const canNativeHls = !!document.createElement("video").canPlayType("application/vnd.apple.mpegurl");
   try {
     await import("@mux/mux-player");
     const p = document.createElement("mux-player");
@@ -41,22 +52,19 @@ export async function openPlayer(pid) {
     p.setAttribute("playsinline", "");
     p.setAttribute("default-show-remaining-time", "");
     p.setAttribute("playback-rates", "0.25 0.5 1");
+    // iPhones and Safari decode most reliably with their own HLS engine.
+    p.setAttribute("prefer-playback", "native");
+    let retried = false;
     p.addEventListener("error", ev => {
       const d = ev.detail || {};
       console.warn("Video error", d);
+      if (!retried && canNativeHls) { retried = true; native(); return; }
       if (!stage.querySelector(".vmsg")) stage.insertAdjacentHTML("beforeend", `<p class="vmsg">This video can't play right now${d.code ? ` (code ${esc(String(d.code))})` : ""}. Try again in a minute.</p>`);
     });
     stage.replaceChildren(p);
   } catch (err) {
-    // Player didn't load (old phone or slow connection): fall back to the phone's own player.
     console.warn("Player failed to load", err);
-    const v = document.createElement("video");
-    v.controls = true; v.playsInline = true; v.preload = "metadata";
-    v.src = `https://stream.mux.com/${encodeURIComponent(pid)}.m3u8`;
-    v.poster = thumbUrl(pid);
-    v.style.width = "100%"; v.style.maxHeight = "80vh";
-    v.onerror = () => say("This video can't play on this device yet. Try again in a minute, or on another phone.");
-    stage.replaceChildren(v);
+    native();
   }
 }
 
