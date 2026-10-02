@@ -116,7 +116,7 @@ export function start(root, { onSignOut }) {
       .filter(s => !q || String(s.name).toLowerCase().includes(q));
     const unread = unreadCount();
     return `<aside class="roster" aria-label="Students">
-      <div class="brand" style="flex-direction:row;align-items:center;gap:12px">${logo("c-logo")}<div style="display:flex;flex-direction:column;gap:2px"><span class="eyebrow">Karina Sánchez Golf</span><h1>Golfers Practice Hub</h1></div></div>
+      <div class="brand" style="flex-direction:row;align-items:center;gap:12px">${logo("c-logo")}<div style="display:flex;flex-direction:column;gap:2px"><h1>Golfers Practice Hub</h1></div></div>
       <button class="nav-btn" data-view="checkin" aria-current="${S.view === "checkin"}">This week's check-in ${unread ? `<span class="badge" title="New notes from students">${unread}</span>` : ""}</button>
       <input id="search" class="search" type="search" placeholder="Search students" aria-label="Search students" value="${esc(S.q)}">
       <div class="filters" role="group" aria-label="Filter">${["All", "Junior", "Adult"].map(f => `<button class="chip" data-filter="${f}" aria-pressed="${S.filter === f}">${f === "All" ? "All" : f + "s"}</button>`).join("")}</div>

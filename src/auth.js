@@ -9,7 +9,7 @@ export function showSignIn(root, onSignedIn) {
   let busy = false;
 
   const shell = inner => `<div class="auth"><div class="auth-inner">
-    <div>${logo("auth-logo")}<div class="mark">Karina Sánchez Golf</div><h1>${inner.title}</h1><div class="flagline"></div><p class="quote">“${esc(quoteOfTheDay())}”<span>– Karina</span></p></div>
+    <div>${logo("auth-logo")}<h1>${inner.title}</h1><div class="flagline"></div><p class="quote">“${esc(quoteOfTheDay())}”</p></div>
     ${inner.card}</div></div>`;
 
   function emailScreen() {

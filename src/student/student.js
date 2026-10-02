@@ -90,7 +90,7 @@ export function start(root, { students, onSignOut }) {
     const avg = recent.length ? (recent.reduce((a, r) => a + +r.score, 0) / recent.length).toFixed(1) : null;
     const dateLine = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
     return top(`Hi, ${firstName()}`, dateLine) + `<main class="s-content">
-      <section class="thought"><span>Today's thought</span><p>${esc(quoteOfTheDay())}</p><small>– Karina</small></section>
+      <section class="thought"><span>Today's thought</span><p>${esc(quoteOfTheDay())}</p></section>
       <section class="card week-card"><h2>This week's practice</h2>
         <div class="big-n">${m.done}<small> / ${m.planned} min</small></div>
         <div class="bar"><i style="width:${m.pct}%"></i></div>
