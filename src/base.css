@@ -85,3 +85,4 @@ a{color:var(--pine)}
 .auth-logo path,.s-logo path,.c-logo path{stroke:currentColor;stroke-width:.6;stroke-linejoin:round}
 .s-logo{height:40px;width:auto;color:var(--ink)}
 .c-logo{height:52px;width:auto;color:var(--ink)}
+.vmsg{color:#fff;text-align:center;font-size:15px;max-width:34ch;margin:12px auto}

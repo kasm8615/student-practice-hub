@@ -10,7 +10,7 @@ export const thumbUrl = pid => `https://image.mux.com/${encodeURIComponent(pid)}
 export function videoThumb(pid, label = "Watch video") {
   if (!pid) return "";
   return `<button type="button" class="vthumb" data-play="${esc(pid)}" aria-label="${esc(label)}">
-    <img src="${thumbUrl(pid)}" alt="" loading="lazy"><span class="vplay" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg></span><span class="vlabel">${esc(label)}</span></button>`;
+    <img src="${thumbUrl(pid)}" alt="" loading="lazy" onerror="this.style.opacity=0"><span class="vplay" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg></span><span class="vlabel">${esc(label)}</span></button>`;
 }
 
 // Full-screen player, loaded only when someone presses play.
@@ -23,16 +23,41 @@ export async function openPlayer(pid) {
   const onKey = e => { if (e.key === "Escape") close(); };
   document.addEventListener("keydown", onKey);
   wrap.addEventListener("click", e => { if (e.target === wrap || e.target.closest(".vclose")) close(); });
-  await import("@mux/mux-player");
-  const p = document.createElement("mux-player");
-  p.setAttribute("playback-id", pid);
-  p.setAttribute("stream-type", "on-demand");
-  p.setAttribute("accent-color", "#4B9CD3");
-  p.setAttribute("autoplay", "");
-  p.setAttribute("playsinline", "");
-  p.setAttribute("default-show-remaining-time", "");
-  p.setAttribute("playback-rates", "0.25 0.5 1");
-  wrap.querySelector(".vstage").replaceChildren(p);
+  const stage = wrap.querySelector(".vstage");
+  const say = msg => { stage.innerHTML = `<p class="vmsg">${esc(msg)}</p>`; };
+  // Ask Mux whether the video is ready before loading the player.
+  let ready = true;
+  try {
+    const r = await fetch(`https://stream.mux.com/${encodeURIComponent(pid)}.m3u8`, { method: "GET", cache: "no-store" });
+    if (r.status === 412 || r.status === 404) ready = false;
+  } catch { /* network hiccup: try the player anyway */ }
+  if (!ready) { say("This video is still processing. Try again in a few minutes."); return; }
+  try {
+    await import("@mux/mux-player");
+    const p = document.createElement("mux-player");
+    p.setAttribute("playback-id", pid);
+    p.setAttribute("stream-type", "on-demand");
+    p.setAttribute("accent-color", "#4B9CD3");
+    p.setAttribute("playsinline", "");
+    p.setAttribute("default-show-remaining-time", "");
+    p.setAttribute("playback-rates", "0.25 0.5 1");
+    p.addEventListener("error", ev => {
+      const d = ev.detail || {};
+      console.warn("Video error", d);
+      if (!stage.querySelector(".vmsg")) stage.insertAdjacentHTML("beforeend", `<p class="vmsg">This video can't play right now${d.code ? ` (code ${esc(String(d.code))})` : ""}. Try again in a minute.</p>`);
+    });
+    stage.replaceChildren(p);
+  } catch (err) {
+    // Player didn't load (old phone or slow connection): fall back to the phone's own player.
+    console.warn("Player failed to load", err);
+    const v = document.createElement("video");
+    v.controls = true; v.playsInline = true; v.preload = "metadata";
+    v.src = `https://stream.mux.com/${encodeURIComponent(pid)}.m3u8`;
+    v.poster = thumbUrl(pid);
+    v.style.width = "100%"; v.style.maxHeight = "80vh";
+    v.onerror = () => say("This video can't play on this device yet. Try again in a minute, or on another phone.");
+    stage.replaceChildren(v);
+  }
 }
 
 // Call once per app root: any [data-play] click opens the player.
