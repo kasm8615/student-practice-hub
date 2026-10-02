@@ -75,5 +75,7 @@ export const demoApi = {
   async scores(sid) { return db.scores.filter(s => !sid || s.student_id === sid); },
   async addScore(student_id, drill_id, score, out_of, scored_on) { const s = { id: uid(), student_id, drill_id, score, out_of, scored_on: scored_on || today() }; db.scores.push(s); ping(); return s; },
   async deleteScore(id) { db.scores = db.scores.filter(s => s.id !== id); ping(); },
+  async videoStart() { throw new Error("Video uploads don't work in the preview."); },
+  async videoStatus() { return { status: "errored" }; },
   watch(_ids, fn) { listeners.add(fn); return () => listeners.delete(fn); }
 };

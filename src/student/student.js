@@ -1,5 +1,6 @@
 import "./student.css";
 import { api } from "../lib/store.js";
+import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { DAYS, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
 
 const ICON = {
@@ -99,7 +100,7 @@ export function start(root, { students, onSignOut }) {
       ${S.profile?.next_lesson || S.profile?.goals ? `<section class="card"><h2>Your season</h2>
         ${S.profile.next_lesson ? `<div class="goal-row"><div><div class="l">Next lesson</div><div class="v">${esc(fmtDate(S.profile.next_lesson).replace(/, \d{4}$/, ""))}</div></div>${avg ? `<div style="text-align:right"><div class="l">Avg of last ${recent.length}</div><div class="v">${avg}</div></div>` : ""}</div>` : ""}
         ${S.profile.goals ? `<p style="margin:0;font-size:14px;white-space:pre-wrap"><b>Goal:</b> ${esc(S.profile.goals)}</p>` : ""}</section>` : ""}
-      <div class="row2"><button class="btn primary" data-act="log">Log a round</button><button class="btn" data-go="notes">Message Karina</button></div>
+      <div class="row2"><button class="btn primary" data-act="log">Log a round</button><button class="btn" data-go="notes">Send Karina a swing</button></div>
     </main>`;
   }
   function planScreen() {
@@ -142,16 +143,16 @@ export function start(root, { students, onSignOut }) {
       <div class="readonly">${LOCK}Written by Karina</div>
       ${drills.length ? `<section class="card"><h2>My drills</h2>${drills.map(d => { const l = lastScore(d.id); const st = d.status === "Mastered" ? ["good", "Mastered"] : l && d.goal && l.score >= +d.goal ? ["good", "Target hit"] : l ? ["warn", `${l.score}/${l.out_of}`] : ["n", d.status || "Assigned"];
         return `<button class="drill" data-drill="${esc(d.id)}"><span><span class="t" style="display:block">${esc(d.name)}</span><span class="tg">${d.goal ? `Target: ${esc(d.goal)}/${esc(d.of || 10)} ` : ""}${esc(d.target || d.category || "")}</span></span><span class="pill ${st[0]}">${esc(st[1])}</span></button>`; }).join("")}</section>` : ""}
-      ${lessons.map(l => `<section class="card lesson"><div class="dt">${esc(fmtDate(l.date))}${l.kind ? " · " + esc(l.kind) : ""}</div><div class="t">${esc(l.focus)}</div>${l.notes ? `<p>${esc(l.notes)}</p>` : ""}${l.homework ? `<div class="hw"><b>Homework:</b> ${esc(l.homework)}</div>` : ""}${demoLink(l.video, "Watch lesson video")}</section>`).join("")}
-      ${fit.length ? `<section class="card"><h2>Fitness</h2>${fit.map(f => `<div class="drill" style="cursor:default"><span><span class="t" style="display:block">${esc(f.name)}${f.dose ? ` <span class="tg">· ${esc(f.dose)}</span>` : ""}</span><span class="tg">${esc(f.kind || "")}${f.notes ? " · " + esc(f.notes) : ""}</span></span>${f.result && f.result !== "—" ? `<span class="pill ${f.result === "Pass" ? "good" : f.result === "Fail" ? "bad" : f.result === "Needs work" ? "warn" : "n"}">${esc(f.result)}</span>` : ""}</div>`).join("")}</section>` : ""}
+      ${lessons.map(l => `<section class="card lesson"><div class="dt">${esc(fmtDate(l.date))}${l.kind ? " · " + esc(l.kind) : ""}</div><div class="t">${esc(l.focus)}</div>${l.notes ? `<p>${esc(l.notes)}</p>` : ""}${l.homework ? `<div class="hw"><b>Homework:</b> ${esc(l.homework)}</div>` : ""}${videoThumb(l.video_pid, "Lesson video")}${demoLink(l.video, "Watch lesson video")}</section>`).join("")}
+      ${fit.length ? `<section class="card"><h2>Fitness</h2>${fit.map(f => `<div class="drill" style="cursor:default"><span><span class="t" style="display:block">${esc(f.name)}${f.dose ? ` <span class="tg">· ${esc(f.dose)}</span>` : ""}</span><span class="tg">${esc(f.kind || "")}${f.notes ? " · " + esc(f.notes) : ""}</span>${f.video_pid ? `<span style="display:block;margin-top:8px">${videoThumb(f.video_pid, "Watch demo")}</span>` : ""}</span>${f.result && f.result !== "—" ? `<span class="pill ${f.result === "Pass" ? "good" : f.result === "Fail" ? "bad" : f.result === "Needs work" ? "warn" : "n"}">${esc(f.result)}</span>` : ""}</div>`).join("")}</section>` : ""}
       ${!lessons.length && !drills.length && !fit.length ? `<div class="card"><p class="muted">Karina's lesson notes and drills will show up here.</p></div>` : ""}
     </main>`;
   }
   function notesScreen() {
     const notes = of("note").slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
     return top("Notes", S.profile?.name || "") + `<main class="s-content">
-      <section class="card"><h2>With Karina</h2><div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "me"}">${esc(n.text)}<small>${n.author === "coach" ? "Karina" : "You"} · ${esc(shortDate(n.created_at))}</small></div>`).join("") || `<p class="muted">No notes yet. Ask a question or tell Karina how practice went.</p>`}</div></section>
-      <form class="card" id="noteForm" novalidate><label for="note" style="font-size:12px;font-weight:600;color:var(--ink-2)">New note or question</label><textarea id="note" placeholder="How practice went, or a question for your next lesson"></textarea><button class="btn primary" type="submit">Send to Karina</button></form>
+      <section class="card"><h2>With Karina</h2><div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "me"}">${n.text ? esc(n.text) : ""}${n.video_pid ? `<div style="margin-top:${n.text ? 8 : 0}px">${videoThumb(n.video_pid, n.author === "coach" ? "Karina's video" : "Your swing")}</div>` : ""}<small>${n.author === "coach" ? "Karina" : "You"} · ${esc(shortDate(n.created_at))}</small></div>`).join("") || `<p class="muted">No notes yet. Ask a question or tell Karina how practice went.</p>`}</div></section>
+      <form class="card" id="noteForm" novalidate><label for="note" style="font-size:12px;font-weight:600;color:var(--ink-2)">New note, question or swing video</label><textarea id="note" placeholder="How practice went, or a question for your next lesson"></textarea><div id="noteVideo"></div><button class="btn primary" type="submit">Send to Karina</button></form>
     </main>`;
   }
   function nav() {
@@ -183,7 +184,7 @@ export function start(root, { students, onSignOut }) {
       const dr = drillById(sh.id);
       if (!dr) return "";
       return wrap(dr.name, `${areaChip(dr.category)}<h2>${esc(dr.name)}</h2>${dr.notes ? `<p>${esc(dr.notes)}</p>` : ""}
-        ${demoLink(dr.video, "Watch Karina's demo")}
+        ${videoThumb(dr.video_pid, "Karina's demo")}${demoLink(dr.video, "Watch Karina's demo")}
         ${dr.goal ? `<div class="target"><b>${esc(dr.goal)}/${esc(dr.of || 10)}</b><span>Target${dr.target ? ": " + esc(dr.target) : ""}</span></div>` : ""}
         <div><h3 style="margin:0 0 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)">Your scores</h3>${hist(dr)}</div>
         ${dr.goal ? `<button class="btn primary" data-act="score-drill">Log a score</button>` : ""}<button class="btn" data-close="1">Close</button>`);
@@ -201,7 +202,7 @@ export function start(root, { students, onSignOut }) {
     }
     return wrap(p.title, `${areaChip(p.area)}<h2>${esc(p.title)}</h2>
       ${dr && dr.notes ? `<p>${esc(dr.notes)}</p>` : ""}${p.details ? `<p>${esc(p.details)}</p>` : ""}
-      ${dr ? demoLink(dr.video, "Watch Karina's demo") : demoLink(p.video, "Watch the demo")}
+      ${dr ? videoThumb(dr.video_pid, "Karina's demo") + demoLink(dr.video, "Watch Karina's demo") : demoLink(p.video, "Watch the demo")}
       ${dr && dr.goal ? `<div class="target"><b>${esc(dr.goal)}/${esc(dr.of || 10)}</b><span>Target${dr.target ? ": " + esc(dr.target) : ""}</span></div>
         <div><h3 style="margin:0 0 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)">Your scores</h3>${hist(dr)}</div>`
         : `<div class="target"><b>${esc(p.minutes || "–")}</b><span>minutes · ${esc(p.day || "")}</span></div>`}
@@ -210,14 +211,22 @@ export function start(root, { students, onSignOut }) {
   }
 
   // ---------- render
+  let noteVideo = null;
   function render() {
+    if (root.querySelector(".vprog")) { clearTimeout(render._t); render._t = setTimeout(render, 1500); return; }
     if (S.loading && !S.profile) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
     const scr = { home, plan: planScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
+    const keep = {};
+    root.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
+    const prevVideo = noteVideo && S.screen === "notes" ? noteVideo.value : "";
     root.innerHTML = `<div class="s-app">${scr}</div>${nav()}${sheetHtml()}`;
+    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && !el.value && v) el.value = v; });
+    const nv = document.getElementById("noteVideo");
+    noteVideo = nv ? videoField(nv, prevVideo, { label: "Attach a swing video" }) : null;
     window.scrollTo(0, y);
     document.body.style.overflow = S.sheet ? "hidden" : "";
   }
@@ -298,11 +307,17 @@ export function start(root, { students, onSignOut }) {
     }
     if (e.target.id === "noteForm") {
       const text = root.querySelector("#note").value.trim();
-      if (!text) { toast("Write your note first."); return; }
-      await run(() => api.addEntry(S.sid, "note", { text }), "Sent to Karina");
+      if (noteVideo?.busy) { toast("Wait for the video to finish uploading."); return; }
+      const video_pid = noteVideo?.value || "";
+      if (!text && !video_pid) { toast("Write a note or attach a video first."); return; }
+      root.querySelector("#note").value = "";
+      if (noteVideo) noteVideo.value = "";
+      const ok = await run(() => api.addEntry(S.sid, "note", video_pid ? { text, video_pid } : { text }), video_pid ? "Video sent to Karina" : "Sent to Karina");
+      if (!ok) root.querySelector("#note").value = text;
     }
   };
 
+  bindPlayer(root);
   api.touchSeen();
   select(S.sid);
 }

@@ -59,3 +59,15 @@ Every change pushed to GitHub redeploys automatically.
 ## Preview on sample data
 
 `VITE_DEMO=1 npm run dev`, then open `/?as=coach` or `/?as=student`. Nothing is saved.
+
+## Video uploads (Mux)
+
+Videos upload straight from a phone to Mux, which converts them so they play on any device.
+
+1. mux.com → sign up → **Settings → Access Tokens → Generate new token**, environment **Production**, permission **Mux Video: Read and Write**.
+2. Cloudflare → student-practice-hub → **Settings → Variables and Secrets** → add, as type **Secret**:
+   - `MUX_TOKEN_ID` = the Access Token ID
+   - `MUX_TOKEN_SECRET` = the Secret Key
+3. Redeploy (any new push to GitHub does it).
+
+The upload endpoint is `functions/api/video.js`. Only signed-in coaches and invited students can create uploads.

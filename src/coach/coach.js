@@ -1,5 +1,6 @@
 import "./coach.css";
 import { api } from "../lib/store.js";
+import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
@@ -22,7 +23,8 @@ const TYPES = {
     { k: "focus", t: "text", l: "Focus", req: true, full: true, ph: "e.g. Early extension, driver face control" },
     { k: "notes", t: "textarea", l: "What we worked on", full: true },
     { k: "homework", t: "textarea", l: "Homework", full: true },
-    { k: "video", t: "url", l: "Video link (YouTube unlisted or Google Drive)", full: true, ph: "https://" }
+    { k: "video_pid", t: "video", l: "Lesson video", full: true },
+    { k: "video", t: "url", l: "Or paste a video link (YouTube, Google Drive)", full: true, ph: "https://" }
   ] },
   drill: { tab: "Drills", one: "Drill", sub: "Drills with a pass target. Students log scores against the target.", fields: [
     { k: "name", t: "text", l: "Drill name", req: true, full: true },
@@ -32,7 +34,8 @@ const TYPES = {
     { k: "of", t: "number", l: "Out of", ph: "e.g. 10" },
     { k: "target", t: "text", l: "What counts", full: true, ph: "e.g. putts finish within a club length past the hole" },
     { k: "notes", t: "textarea", l: "How to do it", full: true },
-    { k: "video", t: "url", l: "Demo video link (optional)", full: true, ph: "https://" }
+    { k: "video_pid", t: "video", l: "Demo video", full: true },
+    { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" }
   ] },
   stat: { tab: "Stats", one: "Round", sub: "Rounds logged by you or the student. The chart tracks 18-hole scores.", fields: [
     { k: "date", t: "date", l: "Date", req: true },
@@ -63,7 +66,8 @@ const TYPES = {
     { k: "result", t: "select", l: "Result", opts: ["Pass", "Needs work", "Fail", "Assigned", "—"] },
     { k: "dose", t: "text", l: "Sets / reps", ph: "e.g. 3 x 10" },
     { k: "notes", t: "textarea", l: "Notes", full: true },
-    { k: "video", t: "url", l: "Demo video link (optional)", full: true, ph: "https://" }
+    { k: "video_pid", t: "video", l: "Demo video", full: true },
+    { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" }
   ] }
 };
 const TAB_ORDER = ["overview", "lesson", "drill", "stat", "plan", "fitness", "note"];
@@ -275,7 +279,7 @@ export function start(root, { onSignOut }) {
       const r = sortDateDesc(rows);
       return head(t) + (r.length ? `<div class="entries">${r.map(e => { const dp = dateParts(e.date); return `<div class="entry" data-edit="${esc(e.id)}" role="button" tabindex="0">
         <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
-        <div><div class="t">${esc(e.focus)}</div><div class="body">${esc(e.notes)}</div>${e.homework ? `<div class="hw"><b>Homework:</b> ${esc(e.homework)}</div>` : ""}</div>
+        <div><div class="t">${esc(e.focus)}</div><div class="body">${esc(e.notes)}</div>${e.homework ? `<div class="hw"><b>Homework:</b> ${esc(e.homework)}</div>` : ""}${e.video_pid ? `<div style="margin-top:8px">${videoThumb(e.video_pid, "Lesson video")}</div>` : ""}</div>
         <div style="text-align:right"><span class="pill neutral">${esc(e.kind || "Lesson")}</span><div style="font-size:12px;margin-top:4px">${vid(e.video)}</div></div></div>`; }).join("")}</div>` : empty(t));
     }
     if (t === "drill") {
@@ -286,6 +290,7 @@ export function start(root, { onSignOut }) {
         <div><div class="t">${esc(e.name)} ${areaChip(e.category)}</div>
         ${e.goal ? `<div style="font-size:13px;margin-top:2px"><b>Target:</b> <span class="hcp">${esc(e.goal)}/${esc(e.of || 10)}</span> ${esc(e.target || "")}</div>` : ""}
         <div class="body">${esc(e.notes)}${e.video ? " · " + vid(e.video) : ""}</div>
+        ${e.video_pid ? `<div style="margin-top:8px">${videoThumb(e.video_pid, "Demo")}</div>` : ""}
         ${sc.length ? `<div class="scoreline">Scores: ${sc.slice(-6).map(x => x.score).join(" → ")}${last ? ` · last ${esc(shortDate(last.scored_on))}` : ""}<span class="mini" aria-hidden="true">${sc.slice(-8).map(x => `<i style="height:${Math.max(2, x.score / max * 22)}px"></i>`).join("")}</span></div>` : e.goal ? `<div class="scoreline" style="color:var(--ink-3)">No scores logged yet</div>` : ""}</div>
         <div>${statusPill(e.status)}</div></div>`; }).join("")}</div>` : empty(t));
     }
@@ -320,7 +325,7 @@ export function start(root, { onSignOut }) {
       const screen = r.filter(e => e.kind !== "Exercise"), ex = r.filter(e => e.kind === "Exercise");
       const list = a => a.length ? `<div class="entries">${a.map(e => { const dp = dateParts(e.date); return `<div class="entry" data-edit="${esc(e.id)}" role="button" tabindex="0">
         <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
-        <div><div class="t">${esc(e.name)}${e.dose ? ` <span class="hcp">· ${esc(e.dose)}</span>` : ""}</div><div class="body">${esc(e.notes)}${e.video ? " · " + vid(e.video) : ""}</div></div>
+        <div><div class="t">${esc(e.name)}${e.dose ? ` <span class="hcp">· ${esc(e.dose)}</span>` : ""}</div><div class="body">${esc(e.notes)}${e.video ? " · " + vid(e.video) : ""}</div>${e.video_pid ? `<div style="margin-top:8px">${videoThumb(e.video_pid, "Demo")}</div>` : ""}</div>
         <div>${e.result && e.result !== "—" ? statusPill(e.result) : ""}</div></div>`; }).join("")}</div>` : '<div class="empty">Nothing logged.</div>';
       const h = txt => `<h4 style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3)">${txt}</h4>`;
       return head(t) + `<div class="grid2"><div style="display:flex;flex-direction:column;gap:10px">${h("TPI screen")}${list(screen)}</div><div style="display:flex;flex-direction:column;gap:10px">${h("Exercises")}${list(ex)}</div></div>`;
@@ -331,14 +336,17 @@ export function start(root, { onSignOut }) {
   function notesPanel(s) {
     const notes = of("note").slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
     return `<div class="panel-head"><div><h3>Notes</h3><p>Messages between you and ${esc(String(s.name).split(/\s+/)[0])}. They see your replies in the app.</p></div></div>
-      <div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "student"}">${esc(n.text)}<small>${n.author === "coach" ? "You" : esc(String(s.name).split(/\s+/)[0])} · ${esc(shortDate(n.created_at))}${n.author === "coach" ? ` · <button class="linkbtn" style="font-size:11px" data-delnote="${esc(n.id)}">Delete</button>` : ""}</small></div>`).join("") || '<div class="empty">No notes yet.</div>'}</div>
-      <form class="reply" id="replyForm" novalidate><textarea id="replyText" aria-label="Write a note" placeholder="Write a note or answer a question"></textarea><button class="btn primary" type="submit">Send</button></form>`;
+      <div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "student"}">${n.text ? esc(n.text) : ""}${n.video_pid ? `<div style="margin-top:${n.text ? 8 : 0}px">${videoThumb(n.video_pid, n.author === "coach" ? "Your video" : "Swing video")}</div>` : ""}<small>${n.author === "coach" ? "You" : esc(String(s.name).split(/\s+/)[0])} · ${esc(shortDate(n.created_at))}${n.author === "coach" ? ` · <button class="linkbtn" style="font-size:11px" data-delnote="${esc(n.id)}">Delete</button>` : ""}</small></div>`).join("") || '<div class="empty">No notes yet.</div>'}</div>
+      <form class="reply" id="replyForm" novalidate style="flex-direction:column;align-items:stretch">
+        <textarea id="replyText" aria-label="Write a note" placeholder="Write a note, answer a question, or send a swing review"></textarea>
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap"><div id="replyVideo"></div><button class="btn primary" type="submit">Send</button></div></form>`;
   }
 
   // ---------- forms
   function fieldHtml(prefix, f, val) {
     const id = `f-${prefix}-${f.k}`, v = val ?? "";
     const cls = "field" + (f.full ? " full" : "") + (f.t === "check" ? " check" : "");
+    if (f.t === "video") return `<div class="${cls}"><label>${esc(f.l)}</label><div data-vfield="${f.k}"></div></div>`;
     if (f.t === "check") return `<div class="${cls}"><input type="checkbox" id="${id}" name="${f.k}" ${v ? "checked" : ""}><label for="${id}">${esc(f.l)}</label></div>`;
     let input;
     if (f.t === "textarea") input = `<textarea id="${id}" name="${f.k}" placeholder="${esc(f.ph || "")}">${esc(v)}</textarea>`;
@@ -355,6 +363,8 @@ export function start(root, { onSignOut }) {
       <div class="modal-actions">${onDelete ? `<button type="button" class="btn danger" data-del="1">${esc(deleteLabel || "Delete")}</button>` : ""}
       <div class="right"><button type="button" class="btn" data-close="1">Cancel</button><button type="submit" class="btn primary">Save</button></div></div></form></div>`;
     const form = mr.querySelector("form");
+    const vids = {};
+    fields.filter(f => f.t === "video").forEach(f => { vids[f.k] = videoField(form.querySelector(`[data-vfield="${f.k}"]`), data ? data[f.k] : ""); });
     const close = () => { mr.innerHTML = ""; document.removeEventListener("keydown", esck); };
     const esck = e => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", esck);
@@ -363,7 +373,9 @@ export function start(root, { onSignOut }) {
     form.addEventListener("submit", async e => {
       e.preventDefault();
       const out = {};
+      if (Object.values(vids).some(v => v.busy)) { toast("Wait for the video to finish uploading."); return; }
       for (const f of fields) {
+        if (f.t === "video") { out[f.k] = vids[f.k].value; continue; }
         const el = form.elements[f.k];
         if (f.t === "check") out[f.k] = el.checked;
         else if (f.t === "number") out[f.k] = el.value === "" ? "" : +el.value;
@@ -413,11 +425,20 @@ export function start(root, { onSignOut }) {
   }
 
   // ---------- render & navigation
+  let replyVideo = null;
   function render() {
+    const view = document.getElementById("cview");
+    if (view.querySelector(".vprog")) { clearTimeout(render._t); render._t = setTimeout(render, 1500); return; } // an upload is in progress: redraw afterwards
     const main = S.view === "student" ? studentHtml() : checkinHtml();
     const focusId = document.activeElement?.id;
-    root.innerHTML = `<div class="c-wrap"><div class="app ${S.view === "student" || S.view === "checkin" ? "has-student" : ""}" id="capp">${rosterHtml()}<main class="main">${main}</main></div></div><div id="modalRoot"></div>`;
-    if (focusId === "search") { const el = document.getElementById("search"); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    const keep = {};
+    view.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
+    const prevVideo = replyVideo && S.view === "student" && S.tab === "note" ? replyVideo.value : "";
+    view.innerHTML = `<div class="c-wrap"><div class="app ${S.view === "student" || S.view === "checkin" ? "has-student" : ""}" id="capp">${rosterHtml()}<main class="main">${main}</main></div></div>`;
+    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && id !== "search" && !el.value) el.value = v; });
+    const rv = document.getElementById("replyVideo");
+    replyVideo = rv ? videoField(rv, prevVideo, { label: "Attach video" }) : null;
+    if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } }
   }
   async function openStudent(id) {
     S.sel = id; S.view = "student"; S.entries = []; S.scores = []; S.invite = S.invite === id ? id : null;
@@ -469,11 +490,17 @@ export function start(root, { onSignOut }) {
     if (ev.target.id !== "replyForm") return;
     ev.preventDefault();
     const text = document.getElementById("replyText").value.trim();
-    if (!text) { toast("Write your note first."); return; }
-    await write(api.addEntry(S.sel, "note", { text }), "Sent");
+    if (replyVideo?.busy) { toast("Wait for the video to finish uploading."); return; }
+    const video_pid = replyVideo?.value || "";
+    if (!text && !video_pid) { toast("Write a note or attach a video first."); return; }
+    document.getElementById("replyText").value = "";
+    if (replyVideo) replyVideo.value = "";
+    const ok = await write(api.addEntry(S.sel, "note", video_pid ? { text, video_pid } : { text }), "Sent");
+    if (!ok) document.getElementById("replyText").value = text;
   };
 
-  root.innerHTML = `<div class="center-msg"><div><p>Loading your students…</p></div></div>`;
+  root.innerHTML = `<div id="cview"><div class="center-msg"><div><p>Loading your students…</p></div></div></div><div id="modalRoot"></div>`;
+  bindPlayer(root);
   (async () => {
     try { await loadStudents(); } catch (err) { toast(friendly(err)); }
     await openCheckin();

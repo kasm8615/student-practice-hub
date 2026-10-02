@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mux/mux-player": "^3.13.4",
     "@supabase/supabase-js": "^2.117.2"
   },
   "devDependencies": {

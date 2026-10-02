@@ -50,6 +50,20 @@ export const api = {
   },
   async deleteScore(id) { must(await supabase.from("drill_scores").delete().eq("id", id)); },
 
+  // ---- video (Mux, through the /api/video function)
+  async videoStart() {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const res = await fetch("/api/video", { method: "POST", headers: { authorization: `Bearer ${token}` } });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Couldn't start the upload.");
+    return body;
+  },
+  async videoStatus(uploadId) {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const res = await fetch(`/api/video?upload=${encodeURIComponent(uploadId)}`, { headers: { authorization: `Bearer ${token}` } });
+    return res.json().catch(() => ({ status: "unknown" }));
+  },
+
   // ---- live updates: calls onChange whenever entries or scores change for these students
   watch(studentIds, onChange) {
     const ch = supabase.channel("changes-" + Math.random().toString(36).slice(2));
