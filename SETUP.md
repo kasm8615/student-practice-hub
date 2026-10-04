@@ -71,3 +71,12 @@ Videos upload straight from a phone to Mux, which converts them so they play on 
 3. Redeploy (any new push to GitHub does it).
 
 The upload endpoint is `functions/api/video.js`. Only signed-in coaches and invited students can create uploads.
+
+## Email alerts when students post
+
+Karina gets an email when a student sends a note, a swing video or logs a round.
+
+1. Resend → **API Keys → Create API Key** (Sending access) → Cloudflare secret `RESEND_API_KEY`.
+2. Make up a long random string → Cloudflare secret `NOTIFY_SECRET`.
+3. Supabase SQL Editor → run `supabase/notify.sql` with `PASTE_NOTIFY_SECRET` replaced by that same string.
+4. Redeploy. The endpoint is `functions/api/notify.js`.
