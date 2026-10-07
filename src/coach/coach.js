@@ -3,7 +3,7 @@ import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
-import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
+import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
   { k: "name", t: "text", l: "Full name", req: true, full: true },
@@ -399,7 +399,7 @@ export function start(root, { onSignOut }) {
     else input = `<input id="${id}" name="${f.k}" type="${f.t}" ${f.t === "number" ? 'inputmode="decimal" step="any"' : ""} value="${esc(v)}" placeholder="${esc(f.ph || "")}">`;
     return `<div class="${cls}"><label for="${id}">${esc(f.l)}${f.req ? " *" : ""}</label>${input}</div>`;
   }
-  function openForm({ title, prefix, fields, data, onSave, onDelete, deleteLabel, extra }) {
+  function openForm({ title, prefix, fields, data, onSave, onDelete, deleteLabel, extra, key }) {
     const mr = document.getElementById("modalRoot");
     mr.innerHTML = `<div class="overlay" data-close="1"><form class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" novalidate>
       <h3>${esc(title)}</h3><div class="form">${fields.map(f => fieldHtml(prefix, f, data ? data[f.k] : (f.t === "date" && f.req ? today() : undefined))).join("")}</div>
@@ -409,10 +409,31 @@ export function start(root, { onSignOut }) {
     const form = mr.querySelector("form");
     const vids = {};
     fields.filter(f => f.t === "video").forEach(f => { vids[f.k] = videoField(form.querySelector(`[data-vfield="${f.k}"]`), data ? data[f.k] : ""); });
+    // Unsaved changes are kept as a draft, and clicking outside the form never throws them away.
+    const snap = () => { const o = {}; Array.from(form.elements).forEach(el => { if (el.name) o[el.name] = el.type === "checkbox" ? el.checked : el.value; }); return JSON.stringify(o); };
+    const initial = snap();
+    const saved = key && draft.get(key);
+    if (saved) {
+      Object.entries(saved).forEach(([k, v]) => { const el = form.elements[k]; if (el && el.name) { if (el.type === "checkbox") el.checked = !!v; else el.value = v; } });
+      if (snap() !== initial) form.querySelector("h3").insertAdjacentHTML("afterend", `<div class="draft-note">Restored what you wrote before. <button type="button" class="linkbtn" data-discard="1">Start over</button></div>`);
+    }
+    const dirty = () => snap() !== initial || Object.entries(vids).some(([k, v]) => v.busy || (v.value || "") !== ((data && data[k]) || ""));
+    const keep = () => { if (!key) return; if (dirty()) draft.set(key, JSON.parse(snap())); else draft.clear(key); };
+    form.addEventListener("input", keep);
+    form.addEventListener("change", keep);
     const close = () => { mr.innerHTML = ""; document.removeEventListener("keydown", esck); };
-    const esck = e => { if (e.key === "Escape") close(); };
+    const discard = () => { if (key) draft.clear(key); close(); };
+    const esck = e => { if (e.key === "Escape") { if (dirty()) toast("Click Save to keep your changes, or Cancel to discard them."); else close(); } };
     document.addEventListener("keydown", esck);
-    mr.querySelector(".overlay").addEventListener("click", e => { if (e.target.dataset.close) close(); });
+    mr.querySelector(".overlay").addEventListener("click", e => {
+      if (e.target.dataset.discard) { discard(); return; }
+      if (!e.target.dataset.close) return;
+      const isCancel = e.target.tagName === "BUTTON";
+      if (!dirty()) { discard(); return; }
+      if (!isCancel) { toast("Your changes are still here. Click Save, or Cancel to discard."); return; }
+      if (!e.target.classList.contains("armed")) { e.target.classList.add("armed"); e.target.textContent = "Discard changes?"; setTimeout(() => { e.target.classList.remove("armed"); e.target.textContent = "Cancel"; }, 3500); return; }
+      discard();
+    });
     const first = form.querySelector("input,select,textarea"); if (first) first.focus();
     form.addEventListener("submit", async e => {
       e.preventDefault();
@@ -430,20 +451,20 @@ export function start(root, { onSignOut }) {
       const btn = form.querySelector('button[type="submit"]'); btn.disabled = true;
       const ok = await onSave(out);
       btn.disabled = false;
-      if (ok !== false) close();
+      if (ok !== false) discard();
     });
     const del = form.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {
       if (!del.classList.contains("armed")) { const l = del.textContent; del.classList.add("armed"); del.textContent = "Click again to confirm"; setTimeout(() => { del.classList.remove("armed"); del.textContent = l; }, 3500); return; }
-      const ok = await onDelete(); if (ok !== false) close();
+      const ok = await onDelete(); if (ok !== false) discard();
     });
   }
   function studentForm(s) {
     const nulls = d => { const o = { ...d }; ["email", "guardian_email", "start_date", "next_lesson"].forEach(k => { if (o[k] === "") o[k] = null; }); if (o.email) o.email = o.email.toLowerCase(); if (o.guardian_email) o.guardian_email = o.guardian_email.toLowerCase(); return o; };
     openForm({
-      title: s ? "Edit profile" : "New student", prefix: "student", fields: STUDENT_FIELDS,
+      title: s ? "Edit profile" : "New student", prefix: "student", fields: STUDENT_FIELDS, key: "student-" + (s ? s.id : "new"),
       data: s || { grp: "Adult", start_date: today() },
-      extra: s ? `<div class="field check"><input type="checkbox" id="f-student-archived" ${s.archived ? "checked" : ""}><label for="f-student-archived">Archived (stopped lessons). Their sign-in stops working; history is kept.</label></div>` : "",
+      extra: s ? `<div class="field check"><input type="checkbox" id="f-student-archived" name="archived" ${s.archived ? "checked" : ""}><label for="f-student-archived">Archived (stopped lessons). Their sign-in stops working; history is kept.</label></div>` : "",
       onSave: async d => {
         if (!d.email && !d.guardian_email) toast("Tip: add a sign-in email so they can use the app.");
         if (s) { d.archived = document.getElementById("f-student-archived").checked; return !!(await write(api.updateStudent(s.id, nulls(d)), "Profile saved")); }
@@ -459,7 +480,7 @@ export function start(root, { onSignOut }) {
     const T = TYPES[type];
     const defaults = type === "plan" ? { day: DAYS[(new Date().getDay() + 6) % 7] } : type === "drill" ? { status: "Assigned", of: 10 } : null;
     openForm({
-      title: (e ? "Edit " : "New ") + T.one.toLowerCase(), prefix: type, fields: T.fields, data: e || defaults,
+      title: (e ? "Edit " : "New ") + T.one.toLowerCase(), prefix: type, fields: T.fields, data: e || defaults, key: `${type}-${e ? e.id : "new-" + S.sel}`,
       onSave: async d => {
         if (type === "plan" && d.drill && !d.area) { const dr = of("drill").find(x => x.id === d.drill); if (dr) d.area = dr.category; }
         return !!(e ? await write(api.updateEntry(e, d), "Saved") : await write(api.addEntry(S.sel, type, d), T.one + " added"));
@@ -479,7 +500,8 @@ export function start(root, { onSignOut }) {
     view.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
     const prevVideo = replyVideo && S.view === "student" && S.tab === "note" ? replyVideo.value : "";
     view.innerHTML = `<div class="c-wrap"><div class="app ${S.view === "student" || S.view === "checkin" ? "has-student" : ""}" id="capp">${rosterHtml()}<main class="main">${main}</main></div></div>`;
-    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && id !== "search" && !el.value) el.value = v; });
+    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && !["search", "replyText", "goalNote"].includes(id) && !el.value) el.value = v; });
+    ["replyText", "goalNote"].forEach(id => { const el = document.getElementById(id); const v = el && draft.get(`${S.sel}.${id}`); if (el && v != null) el.value = v; });
     const rv = document.getElementById("replyVideo");
     replyVideo = rv ? videoField(rv, prevVideo, { label: "Attach video" }) : null;
     if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } }
@@ -529,14 +551,19 @@ export function start(root, { onSignOut }) {
   };
   root.onkeydown = ev => { if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-edit][tabindex]")) { ev.preventDefault(); ev.target.click(); } };
   root.onchange = ev => { const id = ev.target.dataset?.toggle; if (id) write(api.setPlanDone(id, ev.target.checked)); };
-  root.oninput = ev => { if (ev.target.id === "search") { S.q = ev.target.value; render(); } };
+  root.oninput = ev => {
+    if (ev.target.id === "search") { S.q = ev.target.value; render(); }
+    if (ev.target.id === "replyText" || ev.target.id === "goalNote") draft.set(`${S.sel}.${ev.target.id}`, ev.target.value);
+  };
   root.onsubmit = async ev => {
     if (ev.target.id === "goalNoteForm") {
       ev.preventDefault();
       const text = document.getElementById("goalNote").value.trim();
       const g = of("goal")[0];
       const patch = { coach_note: text, coach_note_at: new Date().toISOString() };
-      await write(g ? api.updateEntry(g, patch) : api.addEntry(S.sel, "goal", patch), "Note saved");
+      const sid = S.sel;
+      draft.clear(`${sid}.goalNote`);
+      if (!(await write(g ? api.updateEntry(g, patch) : api.addEntry(sid, "goal", patch), "Note saved"))) draft.set(`${sid}.goalNote`, text);
       return;
     }
     if (ev.target.id !== "replyForm") return;
@@ -547,8 +574,10 @@ export function start(root, { onSignOut }) {
     if (!text && !video_pid) { toast("Write a note or attach a video first."); return; }
     document.getElementById("replyText").value = "";
     if (replyVideo) replyVideo.value = "";
-    const ok = await write(api.addEntry(S.sel, "note", video_pid ? { text, video_pid } : { text }), "Sent");
-    if (!ok) document.getElementById("replyText").value = text;
+    const sid = S.sel;
+    draft.clear(`${sid}.replyText`);
+    const ok = await write(api.addEntry(sid, "note", video_pid ? { text, video_pid } : { text }), "Sent");
+    if (!ok) { draft.set(`${sid}.replyText`, text); const el = document.getElementById("replyText"); if (el) el.value = text; }
   };
 
   root.innerHTML = `<div id="cview"><div class="center-msg"><div><p>Loading your students…</p></div></div></div><div id="modalRoot"></div>`;

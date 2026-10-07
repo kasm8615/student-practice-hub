@@ -4,7 +4,7 @@ import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
-import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
+import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
 
 const ICON = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>',
@@ -293,6 +293,9 @@ export function start(root, { students, onSignOut }) {
 
   // ---------- render
   let noteVideo = null;
+  // Text typed into these forms is kept until it's saved, even if the student leaves the screen or closes the app.
+  const DRAFTABLE = ["noteForm", "practiceForm", "roundForm", "goalForm"].map(f => `#${f} textarea[id], #${f} input[id]:not([type=checkbox]):not([type=date])`).join(", ");
+  const clearDrafts = (formId, sid = S.sid) => { const f = document.getElementById(formId); if (f) f.querySelectorAll("[id]").forEach(el => draft.clear(`${sid}.${el.id}`)); };
   function render() {
     if (root.querySelector(".vprog")) { clearTimeout(render._t); render._t = setTimeout(render, 1500); return; }
     if (S.loading && !S.profile) {
@@ -306,6 +309,7 @@ export function start(root, { students, onSignOut }) {
     const prevVideo = noteVideo && S.screen === "notes" ? noteVideo.value : "";
     root.innerHTML = `<div class="s-app">${scr}</div>${nav()}${sheetHtml()}`;
     Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.value !== v) el.value = v; });
+    root.querySelectorAll(DRAFTABLE).forEach(el => { const v = draft.get(`${S.sid}.${el.id}`); if (v != null) el.value = v; });
     const nv = document.getElementById("noteVideo");
     noteVideo = nv ? videoField(nv, prevVideo, { label: "Attach a swing video" }) : null;
     window.scrollTo(0, y);
@@ -403,14 +407,14 @@ export function start(root, { students, onSignOut }) {
       if (f("score") === "" || isNaN(+f("score"))) { toast("Add your score to save the round."); root.querySelector("#r-score").focus(); return; }
       const d = { date: f("date") || today(), event: f("event"), course: f("course"), holes: f("holes"), score: +f("score"), putts: num(f("putts")), fairways: f("fw"), gir: num(f("gir")), updown: f("ud"), notes: f("notes") };
       const ok = await run(() => api.addEntry(S.sid, "stat", d), "Round saved");
-      if (ok) { S.logOpen = false; render(); }
+      if (ok) { clearDrafts("roundForm"); S.logOpen = false; render(); }
     }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();
       const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
       if (!d.worked && !d.went && !d.areas.length && d.minutes === "") { toast("Add what you practiced first."); return; }
       const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved. Karina will see it.");
-      if (ok) { S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
+      if (ok) { clearDrafts("practiceForm"); S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
     }
     if (e.target.id === "goalForm") {
       const g = goal();
@@ -418,7 +422,7 @@ export function start(root, { students, onSignOut }) {
       GOAL_PERIODS.forEach(([pk]) => { d[pk] = {}; GOAL_FIELDS.forEach(f => { d[pk][f.k] = root.querySelector(`#g-${pk}-${f.k}`).value.trim(); }); });
       if (!GOAL_PERIODS.some(([pk]) => GOAL_FIELDS.some(f => d[pk][f.k]))) { toast("Write at least one goal first."); return; }
       const ok = await run(() => g ? api.updateEntry(g, d) : api.addEntry(S.sid, "goal", d), "Goals saved. Karina will see them.");
-      if (ok) { S.goalDraft = {}; render(); }
+      if (ok) { clearDrafts("goalForm"); S.goalDraft = {}; render(); }
     }
     if (e.target.id === "noteForm") {
       const text = root.querySelector("#note").value.trim();
@@ -427,14 +431,17 @@ export function start(root, { students, onSignOut }) {
       if (!text && !video_pid) { toast("Write a note or attach a video first."); return; }
       root.querySelector("#note").value = "";
       if (noteVideo) noteVideo.value = "";
-      const ok = await run(() => api.addEntry(S.sid, "note", video_pid ? { text, video_pid } : { text }), video_pid ? "Video sent to Karina" : "Sent to Karina");
-      if (!ok) root.querySelector("#note").value = text;
+      const sid = S.sid;
+      draft.clear(`${sid}.note`);
+      const ok = await run(() => api.addEntry(sid, "note", video_pid ? { text, video_pid } : { text }), video_pid ? "Video sent to Karina" : "Sent to Karina");
+      if (!ok) { draft.set(`${sid}.note`, text); const el = root.querySelector("#note"); if (el) el.value = text; }
     }
   };
 
   root.oninput = e => {
     const id = e.target.id || "";
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
+    if (id && e.target.matches(DRAFTABLE)) draft.set(`${S.sid}.${id}`, e.target.value);
     if (id === "calc") {
       const v = +e.target.value;
       if (v >= 60 && v <= 130) { S.calc = v; const out = document.getElementById("benchOut"); if (out) out.innerHTML = benchmarkTable(v, myAverages(of("stat")), esc); }

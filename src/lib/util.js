@@ -81,3 +81,10 @@ export function friendly(err) {
 // Karina's KSG monogram, coloured by the surrounding text colour.
 export const logo = (cls = "logo", label = "Karina Sánchez Golf") =>
   LOGO.replace("<svg ", `<svg class="${cls}" role="img" aria-label="${label}" `);
+
+// Unsaved text is kept in this browser until it's saved, so closing a form or switching screens never loses it.
+export const draft = {
+  get(key) { try { return JSON.parse(localStorage.getItem("sph.draft." + key) || "null"); } catch { return null; } },
+  set(key, val) { try { localStorage.setItem("sph.draft." + key, JSON.stringify(val)); } catch {} },
+  clear(key) { try { localStorage.removeItem("sph.draft." + key); } catch {} }
+};
