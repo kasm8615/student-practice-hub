@@ -166,7 +166,8 @@ export function start(root, { onSignOut }) {
     rows.sort((a, b) => order[a.st] - order[b.st] || (a.pct ?? 0) - (b.pct ?? 0));
     const c = k => rows.filter(r => r.st === k).length;
     const col = { good: "var(--good)", warn: "var(--warn)", bad: "var(--bad)", none: "var(--line)" };
-    return `<section class="checkin">
+    return `<div class="m-bar">${logo("c-logo")}<b>Golfers Practice Hub</b><button class="btn small" data-act="show-roster">Students</button><button class="btn small primary" data-act="add-student">+ Add</button></div>
+      <section class="checkin">
       <div class="panel-head"><div><h3>This week's check-in</h3><p>Practice minutes against each plan, sorted by who needs you most.</p></div>
         <div class="tally"><span class="st-good">${c("good")} on track</span><span class="st-warn">${c("warn")} behind</span><span class="st-bad">${c("bad")} need a nudge</span>${c("none") ? `<span class="st-none">${c("none")} no plan</span>` : ""}</div></div>
       ${rows.length ? `<div class="crows">${rows.map(r => `<div class="crow"><span class="stripe" style="background:${col[r.st]}"></span>
@@ -494,7 +495,7 @@ export function start(root, { onSignOut }) {
   function render() {
     const view = document.getElementById("cview");
     if (view.querySelector(".vprog")) { clearTimeout(render._t); render._t = setTimeout(render, 1500); return; } // an upload is in progress: redraw afterwards
-    const main = S.view === "student" ? studentHtml() : checkinHtml();
+    const main = S.view === "student" ? studentHtml() : S.view === "roster" ? "" : checkinHtml();
     const focusId = document.activeElement?.id;
     const keep = {};
     view.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -536,6 +537,7 @@ export function start(root, { onSignOut }) {
     if (t.dataset.delnote) { await write(api.deleteEntry(t.dataset.delnote), "Note deleted"); return; }
     const a = t.dataset.act;
     if (a === "add-student") return studentForm();
+    if (a === "show-roster") { S.view = "roster"; render(); window.scrollTo(0, 0); return; }
     if (a === "edit-student") return studentForm(S.students.find(x => x.id === S.sel));
     if (a === "invite") { S.invite = S.sel; render(); return; }
     if (a === "close-invite") { S.invite = null; render(); return; }

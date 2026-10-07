@@ -171,9 +171,16 @@ a{color:var(--pine)}
 .crow .drl{font-size:12px;color:var(--ink-2)}
 .crow .act{justify-self:end;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .crow .newnote{font-size:12px;color:var(--pine);font-weight:600}
-@media (max-width:900px){.crow{grid-template-columns:6px minmax(0,1fr) auto}.crow .prog,.crow .drl-col{grid-column:2/-1}}
+@media (max-width:900px){.crow{grid-template-columns:6px minmax(0,1fr) auto}.crow .prog,.crow .drl-col,.crow .act{grid-column:2/-1}.crow .act{justify-self:start}}
 
 #goalNoteForm textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px;width:100%;min-height:80px;font:inherit;color:var(--ink);resize:vertical}
 .box .bench{max-width:560px}
 .draft-note{background:var(--flag-soft);border-radius:10px;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .btn.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+
+.m-bar{display:none}
+@media (max-width:760px){
+  .m-bar{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .m-bar b{flex:1;font-family:var(--display);font-size:20px;line-height:1.1}
+  .m-bar .c-logo{width:34px;height:34px;flex:none}
+}
