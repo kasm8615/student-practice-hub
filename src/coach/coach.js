@@ -1,6 +1,8 @@
 import "./coach.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
+import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
+import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
@@ -70,12 +72,15 @@ const TYPES = {
     { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" }
   ] }
 };
-const TAB_ORDER = ["overview", "lesson", "drill", "stat", "plan", "fitness", "note"];
+const TAB_ORDER = ["overview", "goal", "lesson", "drill", "stat", "plan", "session", "fitness", "note"];
+const TAB_LABEL = { overview: "Overview", goal: "Goals", session: "Practice log", note: "Notes" };
+const RATINGS = ["Rough", "Meh", "OK", "Good", "Great"];
+const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 export function start(root, { onSignOut }) {
   const S = {
     students: [], sel: null, view: "checkin", tab: "overview", filter: "All", q: "", showArchived: false,
-    entries: [], scores: [], seen: {}, week: { plans: [], notes: [], scores: [], drills: [] }, invite: null
+    entries: [], scores: [], seen: {}, week: { plans: [], notes: [], scores: [], drills: [], sessions: [] }, invite: null
   };
   let stopWatch = null, reloadTimer = null;
 
@@ -91,8 +96,8 @@ export function start(root, { onSignOut }) {
     S.entries = entries; S.scores = scores;
   }
   async function loadWeek() {
-    const [plans, notes, drills, scores] = await Promise.all([api.entriesOfType("plan"), api.entriesOfType("note"), api.entriesOfType("drill"), api.scores()]);
-    S.week = { plans, notes, drills, scores };
+    const [plans, notes, drills, scores, sessions] = await Promise.all([api.entriesOfType("plan"), api.entriesOfType("note"), api.entriesOfType("drill"), api.scores(), api.entriesOfType("session")]);
+    S.week = { plans, notes, drills, scores, sessions };
   }
   async function refresh() {
     try {
@@ -153,7 +158,9 @@ export function start(root, { onSignOut }) {
         drl = `${d ? d.name : "Drill"} ${last.score}/${last.out_of}` + (prev ? (last.score > prev.score ? `, up from ${prev.score}` : last.score < prev.score ? `, down from ${prev.score}` : ", same as last time") : "") + ` · ${shortDate(last.scored_on)}`;
       }
       const notes = S.week.notes.filter(n => n.student_id === s.id && n.author === "student" && new Date(n.created_at).getTime() > since);
-      return { s, planned, done, pct, st, drl, notes, seen: S.seen[s.id] };
+      const ws = weekStart();
+      const sess = S.week.sessions.filter(x => x.student_id === s.id && String(x.date) >= ws);
+      return { s, planned, done, pct, st, drl, notes, sess, smin: sess.reduce((a, x) => a + (+x.minutes || 0), 0), seen: S.seen[s.id] };
     });
     const order = { bad: 0, warn: 1, none: 2, good: 3 };
     rows.sort((a, b) => order[a.st] - order[b.st] || (a.pct ?? 0) - (b.pct ?? 0));
@@ -164,7 +171,8 @@ export function start(root, { onSignOut }) {
         <div class="tally"><span class="st-good">${c("good")} on track</span><span class="st-warn">${c("warn")} behind</span><span class="st-bad">${c("bad")} need a nudge</span>${c("none") ? `<span class="st-none">${c("none")} no plan</span>` : ""}</div></div>
       ${rows.length ? `<div class="crows">${rows.map(r => `<div class="crow"><span class="stripe" style="background:${col[r.st]}"></span>
         <div><button class="nm" data-sid="${esc(r.s.id)}">${esc(r.s.name)}</button><div class="sub">${esc(r.s.grp)} · opened ${r.seen ? ago(r.seen) : "never"}</div>
-          ${r.notes.length ? `<div class="newnote">${r.notes.length} new note${r.notes.length > 1 ? "s" : ""}</div>` : ""}</div>
+          ${r.notes.length ? `<div class="newnote">${r.notes.length} new note${r.notes.length > 1 ? "s" : ""}</div>` : ""}
+          ${r.sess.length ? `<div class="sub" style="color:var(--pine)">Logged ${r.sess.length} practice${r.sess.length > 1 ? "s" : ""}${r.smin ? ` · ${r.smin} min` : ""}</div>` : ""}</div>
         <div class="prog">${r.pct == null ? `<div class="sub">No practice plan this week</div>` : `<div class="mins"><span>${r.done} of ${r.planned} min</span><span>${r.pct}%</span></div><div class="track"><i style="width:${Math.min(100, r.pct)}%;background:${col[r.st]}"></i></div>`}</div>
         <div class="drl drl-col">${esc(r.drl)}</div>
         <div class="act">${r.st === "good" ? `<span class="pill good">On track</span>` : `<button class="btn small" data-remind="${esc(r.s.id)}">Copy reminder</button>`}</div></div>`).join("")}</div>`
@@ -188,7 +196,7 @@ export function start(root, { onSignOut }) {
     const s = S.students.find(x => x.id === S.sel);
     if (!s) return `<section class="welcome"><h2>Pick a student</h2><p>Choose someone from the list, or add a new student.</p></section>`;
     const counts = {};
-    TAB_ORDER.forEach(t => counts[t] = t === "overview" ? "" : of(t).length);
+    TAB_ORDER.forEach(t => counts[t] = t === "overview" || t === "goal" ? "" : of(t).length);
     const logins = [s.email, s.guardian_email].filter(Boolean);
     return `<button class="btn small ghost back" data-view="checkin">← Back</button>
       <section class="hero">
@@ -200,8 +208,8 @@ export function start(root, { onSignOut }) {
         <div class="hero-actions">${logins.length && !s.archived ? `<button class="btn small" data-act="invite">Invite</button>` : ""}<button class="btn small" data-act="edit-student">Edit profile</button></div>
       </section>
       ${S.invite === s.id ? inviteHtml(s) : ""}
-      <nav class="tabs" role="tablist">${TAB_ORDER.map(t => `<button class="tab" role="tab" data-tab="${t}" aria-selected="${S.tab === t}">${t === "overview" ? "Overview" : t === "note" ? "Notes" : TYPES[t].tab}${counts[t] !== "" ? `<span class="count">${counts[t]}</span>` : ""}</button>`).join("")}</nav>
-      <section class="panel">${S.tab === "overview" ? overview(s) : S.tab === "note" ? notesPanel(s) : panel(S.tab)}</section>`;
+      <nav class="tabs" role="tablist">${TAB_ORDER.map(t => `<button class="tab" role="tab" data-tab="${t}" aria-selected="${S.tab === t}">${TAB_LABEL[t] || TYPES[t].tab}${counts[t] !== "" ? `<span class="count">${counts[t]}</span>` : ""}</button>`).join("")}</nav>
+      <section class="panel">${S.tab === "overview" ? overview(s) : S.tab === "note" ? notesPanel(s) : S.tab === "goal" ? goalsPanel(s) : S.tab === "session" ? sessionsPanel(s) : panel(S.tab)}</section>`;
   }
   function inviteHtml(s) {
     const email = s.grp === "Junior" && s.guardian_email ? s.guardian_email : (s.email || s.guardian_email);
@@ -235,7 +243,9 @@ export function start(root, { onSignOut }) {
       <div class="kpi"><div class="l">Last round</div><div class="v">${rounds[0] ? esc(rounds[0].score) : "–"}</div><div class="h">${rounds[0] ? esc((rounds[0].holes || "18") + " holes · " + (rounds[0].course || fmtDate(rounds[0].date))) : "No rounds yet"}</div></div>
     </div>
     <div class="grid2">
-      <div class="box"><h4>Season goals</h4><p style="white-space:pre-wrap">${s.goals ? esc(s.goals) : '<span style="color:var(--ink-3)">No goals set. Use Edit profile to add them.</span>'}</p></div>
+      <div class="box"><h4>Goals</h4>${s.goals ? `<p style="white-space:pre-wrap"><b>Your focus:</b> ${esc(s.goals)}</p>` : ""}
+        ${(() => { const g = of("goal")[0]?.m3 || {}; const l = GOAL_FIELDS.filter(f => g[f.k]); return l.length ? `<p style="font-size:12px;color:var(--ink-3);margin-top:8px">Their 3-month goals</p>${l.map(f => `<p style="margin-top:4px"><b>${f.l}:</b> ${esc(g[f.k])}</p>`).join("")}` : `<p style="color:var(--ink-3);margin-top:6px">The student hasn't written their goals yet.</p>`; })()}
+        <button class="linkbtn" data-tab="goal" style="margin-top:8px">Open goals ›</button></div>
       <div class="box"><h4>Current homework</h4>${hw ? `<p style="white-space:pre-wrap">${esc(hw.homework)}</p><p style="font-size:12px;color:var(--ink-3);margin-top:6px">From ${esc(fmtDate(hw.date))} · ${esc(hw.focus || "")}</p>` : '<p style="color:var(--ink-3)">No homework yet.</p>'}</div>
       <div class="box"><h4>Score trend (18 holes)</h4>${chart(rounds)}</div>
       <div class="box"><h4>Fitness flags</h4>${flags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${flags.map(f => `<span class="pill ${f.result === "Fail" ? "bad" : "warn"}">${esc(f.name)}</span>`).join("")}</div>` : '<p style="color:var(--ink-3)">No TPI flags logged.</p>'}
@@ -331,6 +341,40 @@ export function start(root, { onSignOut }) {
       return head(t) + `<div class="grid2"><div style="display:flex;flex-direction:column;gap:10px">${h("TPI screen")}${list(screen)}</div><div style="display:flex;flex-direction:column;gap:10px">${h("Exercises")}${list(ex)}</div></div>`;
     }
     return "";
+  }
+
+  function goalsPanel(s) {
+    const g = of("goal")[0];
+    const first = esc(String(s.name).split(/\s+/)[0]);
+    const mine = myAverages(of("stat"));
+    const m = String(g?.m3?.score || "").match(/\b(6\d|7\d|8\d|9\d|1[01]\d)\b/);
+    const target = m ? +m[1] : null;
+    return `<div class="panel-head"><div><h3>Goals</h3><p>${first} writes these in the app. Your note shows at the top of their Goals screen.</p></div></div>
+      ${g ? `<div class="grid2">${GOAL_PERIODS.map(([pk, pl]) => `<div class="box"><h4>${pl}</h4>${GOAL_FIELDS.map(f => `<p style="margin-top:8px"><b>${f.l}</b><br>${g[pk]?.[f.k] ? esc(g[pk][f.k]) : '<span style="color:var(--ink-3)">Not set</span>'}</p>`).join("")}</div>`).join("")}</div>
+        <p style="font-size:12px;color:var(--ink-3);margin:0">Last updated ${esc(shortDate(g.updated_at))}</p>`
+        : `<div class="empty">${first} hasn't written goals yet. They'll find a Goals tab in the app with examples and a guide.</div>`}
+      ${target ? `<div class="box"><h4>What ${target} takes vs. ${first}'s last rounds</h4>${benchmarkTable(target, mine, esc)}</div>` : ""}
+      <form id="goalNoteForm" class="box" novalidate style="display:flex;flex-direction:column;gap:8px"><h4 style="margin:0">Your note on ${first}'s goals</h4>
+        <textarea id="goalNote" placeholder="e.g. Love the putting goal. Let's make the score goal 92 for the first 3 months and build from there.">${esc(g?.coach_note || "")}</textarea>
+        <div><button class="btn primary small" type="submit">Save note</button></div></form>`;
+  }
+  function sessionsPanel(s) {
+    const r = sortDateDesc(of("session"));
+    const first = esc(String(s.name).split(/\s+/)[0]);
+    const ws = weekStart();
+    const wk = r.filter(x => String(x.date) >= ws);
+    const last30 = r.filter(x => (Date.now() - new Date(x.date + "T12:00:00").getTime()) < 30 * 864e5);
+    const min = a => a.reduce((t, x) => t + (+x.minutes || 0), 0);
+    return `<div class="panel-head"><div><h3>Practice log</h3><p>What ${first} practiced on their own and how it went.</p></div></div>
+      <div class="kpis"><div class="kpi"><div class="l">This week</div><div class="v">${wk.length}</div><div class="h">${min(wk)} min</div></div>
+        <div class="kpi"><div class="l">Last 30 days</div><div class="v">${last30.length}</div><div class="h">${min(last30)} min</div></div></div>
+      ${last30.length ? `<div class="box" style="display:flex;flex-direction:column;gap:8px"><h4 style="margin:0">Focus, last 30 days</h4>${focusBar(last30.flatMap(x => (x.areas || []).map(a => ({ a, m: (+x.minutes || 0) / (x.areas.length || 1) }))).map(o => ({ ...o, m: Math.round(o.m) })), o => o.m, o => o.a)}</div>` : ""}
+      ${r.length ? `<div class="entries">${r.map(e => { const dp = dateParts(e.date); return `<div class="entry">
+        <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
+        <div><div class="t">${(e.areas || []).map(areaChip).join(" ") || "Practice"}</div>
+          ${e.worked ? `<div class="body"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}${e.went ? `<div class="body"><b>How it went:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>Next time:</b> ${esc(e.next)}</div>` : ""}</div>
+        <div style="text-align:right">${e.minutes ? `<div class="hcp" style="font-size:18px">${esc(e.minutes)} min</div>` : ""}${e.rating ? `<span class="pill ${+e.rating >= 4 ? "good" : +e.rating === 3 ? "warn" : "bad"}">${RATINGS[+e.rating - 1]}</span>` : ""}</div></div>`; }).join("")}</div>`
+        : `<div class="empty">No practice logged yet. ${first} logs sessions from the Plan screen or Home.</div>`}`;
   }
 
   function notesPanel(s) {
@@ -487,6 +531,14 @@ export function start(root, { onSignOut }) {
   root.onchange = ev => { const id = ev.target.dataset?.toggle; if (id) write(api.setPlanDone(id, ev.target.checked)); };
   root.oninput = ev => { if (ev.target.id === "search") { S.q = ev.target.value; render(); } };
   root.onsubmit = async ev => {
+    if (ev.target.id === "goalNoteForm") {
+      ev.preventDefault();
+      const text = document.getElementById("goalNote").value.trim();
+      const g = of("goal")[0];
+      const patch = { coach_note: text, coach_note_at: new Date().toISOString() };
+      await write(g ? api.updateEntry(g, patch) : api.addEntry(S.sel, "goal", patch), "Note saved");
+      return;
+    }
     if (ev.target.id !== "replyForm") return;
     ev.preventDefault();
     const text = document.getElementById("replyText").value.trim();

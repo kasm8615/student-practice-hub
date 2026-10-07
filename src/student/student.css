@@ -75,8 +75,8 @@ textarea{min-height:72px;resize:vertical}
 .drill .tg{font-size:12px;color:var(--ink-3)}
 .readonly{font-size:11px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:10}
-.nav div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(8px + env(safe-area-inset-bottom,0px))}
-.nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:600;color:var(--ink-3);padding:4px 0;position:relative}
+.nav div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr);padding:6px 2px calc(8px + env(safe-area-inset-bottom,0px))}
+.nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;font-weight:600;color:var(--ink-3);padding:4px 0;position:relative}
 .nav button svg{width:22px;height:22px}
 .nav button[aria-current="page"]{color:var(--pine)}
 .nav .dot{position:absolute;top:2px;left:calc(50% + 8px);width:8px;height:8px;border-radius:50%;background:var(--bad)}
@@ -111,3 +111,42 @@ textarea{min-height:72px;resize:vertical}
 .thought span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
 .thought p{margin:0;font-size:16px;font-weight:600;line-height:1.4}
 .thought small{color:var(--ink-3);font-size:12px}
+
+/* goals */
+.goal-peek{display:flex;flex-direction:column;gap:4px;text-align:left;border:1px solid var(--line);background:var(--pine-soft);border-radius:12px;padding:10px 12px;font-size:14px;color:var(--ink);width:100%}
+.goal-peek span{overflow-wrap:anywhere}
+.goal-peek small{color:var(--pine);font-weight:600;font-size:12px;margin-top:2px}
+.guide summary{font-weight:700;font-size:15px;cursor:pointer;list-style-position:outside;margin-left:16px}
+.guide p,.guide li{font-size:14px;line-height:1.5;color:var(--ink-2);margin:0}
+.guide p{margin-top:10px}
+.gtypes{margin:10px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.gtypes b{color:var(--ink)}
+.gtip{background:var(--flag-soft);border-radius:10px;padding:10px 12px;color:var(--ink)!important}
+.coach-note{border-left:4px solid var(--pine)}
+.coach-note p{margin:0;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.goal-form{display:flex;flex-direction:column;gap:14px}
+.goal-form label small{display:block;font-weight:400;color:var(--ink-3);font-size:12px;margin-top:1px}
+.goal-form textarea{min-height:58px}
+textarea::placeholder,input::placeholder{color:var(--ink-3);opacity:.75;font-style:italic}
+.calc{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.calc label{font-size:13px;font-weight:600;color:var(--ink-2)}
+.calc input{width:96px;text-align:center;font-family:var(--display);font-size:28px;font-weight:700;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:4px 6px}
+/* practice log */
+.pform{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:12px}
+fieldset.field{border:0;padding:0;margin:0}
+fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:0;margin-bottom:6px}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.pick-btn{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.pick-btn[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:var(--pine-ink)}
+.rate-pick .pick-btn{flex:1;padding:8px 4px;text-align:center}
+.sess .sess-areas{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px}
+.sess-areas{display:flex;flex-wrap:wrap;gap:4px}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.sess-side{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right}
+.sess-side b{font-family:var(--display);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.sess-side small{font-size:10px;color:var(--ink-3);text-transform:uppercase}
+.rate{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.rate.r1,.rate.r2{background:var(--bad-soft);color:var(--bad)}
+.rate.r3{background:var(--warn-soft);color:var(--warn)}
+.rate.r4,.rate.r5{background:var(--good-soft);color:var(--good)}
+.sh3{margin:0 0 4px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}

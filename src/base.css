@@ -86,3 +86,13 @@ a{color:var(--pine)}
 .s-logo{height:40px;width:auto;color:var(--ink)}
 .c-logo{height:52px;width:auto;color:var(--ink)}
 .vmsg{color:#fff;text-align:center;font-size:15px;max-width:34ch;margin:12px auto}
+
+/* score-goal benchmark table (student and coach) */
+.bench table{width:100%;border-collapse:collapse;font-size:14px}
+.bench th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);text-align:left;padding:6px 0;border-bottom:1px solid var(--line)}
+.bench td{padding:8px 0;border-bottom:1px solid var(--line)}
+.bench td small{color:var(--ink-3);font-size:11px}
+.bench .n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;padding-left:10px}
+.bench td.n b{color:var(--pine);font-weight:600}
+.bench-tip{margin:10px 0 0;font-size:14px;background:var(--pine-soft);border-radius:10px;padding:10px 12px}
+.bench-src{margin:8px 0 0;font-size:11px;color:var(--ink-3)}

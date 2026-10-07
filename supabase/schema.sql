@@ -46,7 +46,7 @@ create table if not exists public.student_users (
 create table if not exists public.entries (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students on delete cascade,
-  type text not null check (type in ('lesson', 'drill', 'stat', 'plan', 'fitness', 'note')),
+  type text not null check (type in ('lesson', 'drill', 'stat', 'plan', 'fitness', 'note', 'session', 'goal')),
   data jsonb not null default '{}'::jsonb,
   author text not null default 'student' check (author in ('coach', 'student')),
   created_by uuid default auth.uid() references auth.users on delete set null,
@@ -54,6 +54,7 @@ create table if not exists public.entries (
   updated_at timestamptz not null default now()
 );
 create index if not exists entries_student_type on public.entries (student_id, type);
+create unique index if not exists entries_one_goal_per_student on public.entries (student_id) where type = 'goal';
 
 create table if not exists public.drill_scores (
   id uuid primary key default gen_random_uuid(),
@@ -219,24 +220,25 @@ drop policy if exists entries_insert on public.entries;
 create policy entries_insert on public.entries
   for insert with check (
     is_coach()
-    or (student_id in (select my_students()) and type in ('stat', 'note'))
+    or (student_id in (select my_students()) and type in ('stat', 'note', 'session', 'goal'))
   );
 
 drop policy if exists entries_update on public.entries;
 create policy entries_update on public.entries
   for update using (
     is_coach()
-    or (student_id in (select my_students()) and type in ('stat', 'note') and created_by = auth.uid())
+    or (student_id in (select my_students()) and type in ('stat', 'note', 'session') and created_by = auth.uid())
+    or (student_id in (select my_students()) and type = 'goal')
   ) with check (
     is_coach()
-    or (student_id in (select my_students()) and type in ('stat', 'note'))
+    or (student_id in (select my_students()) and type in ('stat', 'note', 'session', 'goal'))
   );
 
 drop policy if exists entries_delete on public.entries;
 create policy entries_delete on public.entries
   for delete using (
     is_coach()
-    or (student_id in (select my_students()) and type in ('stat', 'note') and created_by = auth.uid())
+    or (student_id in (select my_students()) and type in ('stat', 'note', 'session') and created_by = auth.uid())
   );
 
 drop policy if exists scores_read on public.drill_scores;

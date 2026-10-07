@@ -80,3 +80,11 @@ Karina gets an email when a student sends a note, a swing video or logs a round.
 2. Make up a long random string → Cloudflare secret `NOTIFY_SECRET`.
 3. Supabase SQL Editor → run `supabase/notify.sql` with `PASTE_NOTIFY_SECRET` replaced by that same string.
 4. Redeploy. The endpoint is `functions/api/notify.js`.
+
+## Update 2: goals, practice log, emails to students
+
+Supabase SQL Editor → run `supabase/update-2.sql` (no values to replace; it uses the notify secret already saved).
+
+- Students get a **Goals** tab (3- and 6-month score, performance, mental and practice-habit goals, plus a score calculator based on Break X Golf's averages from 3,788 amateur rounds). Karina adds a note from the student's Goals tab.
+- Students log practice sessions from Home or the Plan tab. Karina sees them under **Practice log** and in the check-in.
+- Emails: Karina gets one when a student logs practice or sets goals. Students (and parents) get one when Karina sends a note or video, or logs a lesson. Replies go to Karina.

@@ -2,22 +2,27 @@ import "./student.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
-import { logo, DAYS, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
+import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
+import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
+import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly } from "../lib/util.js";
 
 const ICON = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>',
   plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
   rounds: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V3l10 4-10 4"/><ellipse cx="12" cy="21" rx="7" ry="1.2"/></svg>',
   lessons: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11"/></svg>',
+  goals: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
   notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>'
 };
 const PLAY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>';
+const RATINGS = ["Rough", "Meh", "OK", "Good", "Great"];
 const LOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>';
 
 export function start(root, { students, onSignOut }) {
   const S = {
     students, sid: null, profile: null, entries: [], scores: [],
-    screen: "home", sheet: null, logOpen: false, loading: true
+    screen: "home", sheet: null, logOpen: false, loading: true,
+    practiceOpen: false, sess: { areas: [], rating: 0 }, goalDraft: {}, calc: null
   };
   try { const saved = localStorage.getItem("sph.student"); if (students.some(s => s.id === saved)) S.sid = saved; } catch {}
   if (!S.sid) S.sid = students[0].id;
@@ -33,7 +38,7 @@ export function start(root, { students, onSignOut }) {
     } catch (err) { S.loading = false; render(); toast(friendly(err)); }
   }
   function select(id) {
-    S.sid = id; S.loading = true; S.sheet = null; S.screen = "home";
+    S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false;
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
     stopWatch = api.watch([id], () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 400); });
@@ -52,6 +57,9 @@ export function start(root, { students, onSignOut }) {
     return { planned, done, pct: planned ? Math.round(done / planned * 100) : 0 };
   };
   const byDateDesc = a => a.slice().sort((x, y) => String(y.date || y.created_at).localeCompare(String(x.date || x.created_at)));
+  const goal = () => of("goal")[0] || null;
+  const sessions = () => byDateDesc(of("session"));
+  const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - todayIndex()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const firstName = () => String(S.profile?.name || "").split(/\s+/)[0];
 
   // ---------- pieces
@@ -99,20 +107,79 @@ export function start(root, { students, onSignOut }) {
       <section class="card"><h2>Today <span>${todays.reduce((a, x) => a + (+x.minutes || 0), 0) || ""}${todays.length ? " min" : ""}</span></h2>
         ${todays.map(task).join("") || `<p class="muted">Nothing planned today. Rest, or get ahead on tomorrow.</p>`}</section>
       ${lesson ? `<section class="card"><h2>Homework from Karina</h2><div class="hw">${esc(lesson.homework)}<div class="from">From your ${esc(shortDate(lesson.date))} lesson${lesson.focus ? " · " + esc(lesson.focus) : ""}</div></div></section>` : ""}
-      ${S.profile?.next_lesson || S.profile?.goals ? `<section class="card"><h2>Your season</h2>
-        ${S.profile.next_lesson ? `<div class="goal-row"><div><div class="l">Next lesson</div><div class="v">${esc(fmtDate(S.profile.next_lesson).replace(/, \d{4}$/, ""))}</div></div>${avg ? `<div style="text-align:right"><div class="l">Avg of last ${recent.length}</div><div class="v">${avg}</div></div>` : ""}</div>` : ""}
-        ${S.profile.goals ? `<p style="margin:0;font-size:14px;white-space:pre-wrap"><b>Goal:</b> ${esc(S.profile.goals)}</p>` : ""}</section>` : ""}
-      <div class="row2"><button class="btn primary" data-act="log">Log a round</button><button class="btn" data-go="notes">Send Karina a swing</button></div>
+      <section class="card"><h2>Your season</h2>
+        ${S.profile?.next_lesson || avg ? `<div class="goal-row">${S.profile?.next_lesson ? `<div><div class="l">Next lesson</div><div class="v">${esc(fmtDate(S.profile.next_lesson).replace(/, \d{4}$/, ""))}</div></div>` : "<div></div>"}${avg ? `<div style="text-align:right"><div class="l">Avg of last ${recent.length}</div><div class="v">${avg}</div></div>` : ""}</div>` : ""}
+        ${S.profile?.goals ? `<p style="margin:0;font-size:14px;white-space:pre-wrap"><b>Karina's focus:</b> ${esc(S.profile.goals)}</p>` : ""}
+        ${(() => { const g = goal()?.m3 || {}; const lines = [["Score goal", g.score], ["Practice habit", g.process]].filter(([, v]) => v);
+          return lines.length ? `<button class="goal-peek" data-go="goals">${lines.map(([k, v]) => `<span><b>${k}:</b> ${esc(v)}</span>`).join("")}<small>Your 3-month goals ›</small></button>`
+            : `<button class="btn" data-go="goals">Set your goals</button>`; })()}
+      </section>
+      <button class="btn primary" data-act="practice">Log today's practice</button>
+      <div class="row2"><button class="btn" data-act="log">Log a round</button><button class="btn" data-go="notes">Send Karina a swing</button></div>
     </main>`;
   }
   function planScreen() {
     const m = mins(), p = plan(), ti = todayIndex();
-    if (!p.length) return top("This week", S.profile?.name || "") + `<main class="s-content"><div class="card"><p class="muted">Karina hasn't set this week's plan yet.</p></div></main>`;
-    return top("This week", S.profile?.name || "") + `<main class="s-content">
+    const planPart = !p.length ? `<div class="card"><p class="muted">Karina hasn't set this week's plan yet. You can still log what you practice below.</p></div>` : `
       <section class="card"><h2>Progress <span>${m.done} of ${m.planned} min · ${m.pct}%</span></h2><div class="bar plain"><i style="width:${m.pct}%"></i></div></section>
       <section class="card"><h2>What you're working on</h2>${focusBar(p, x => x.minutes, x => x.area)}</section>
       ${DAYS.map((d, i) => { const b = p.filter(x => x.day === d); if (!b.length) return ""; return `<section class="card"><h2>${d}${i === ti ? " · today" : ""} <span>${b.reduce((a, x) => a + (+x.minutes || 0), 0)} min</span></h2>${b.map(task).join("")}</section>`; }).join("")}
-      <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p></main>`;
+      <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p>`;
+    return top("This week", S.profile?.name || "") + `<main class="s-content">${planPart}${practiceLog()}</main>`;
+  }
+  function practiceLog() {
+    const all = sessions(), ws = weekStart();
+    const wk = all.filter(x => String(x.date) >= ws);
+    const wmin = wk.reduce((a, x) => a + (+x.minutes || 0), 0);
+    return `<section class="card" id="practice-log"><h2>Practice log <span>${wk.length ? `This week: ${wk.length} session${wk.length > 1 ? "s" : ""} · ${wmin} min` : ""}</span></h2>
+      <p class="muted">After every practice, write down what you worked on and how it went. It's the fastest way to see what's working, and Karina reads every one.</p>
+      ${S.practiceOpen ? practiceForm() : `<button class="btn primary" data-act="practice">+ Log a practice</button>`}
+      ${all.slice(0, 12).map(sessionRow).join("") || (S.practiceOpen ? "" : `<p class="muted">No practice logged yet.</p>`)}
+      ${all.length > 12 ? `<p class="muted">Showing your last 12 sessions.</p>` : ""}</section>`;
+  }
+  function sessionRow(x) {
+    const d = dateParts(x.date);
+    return `<button class="round sess" data-sess="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
+      <span style="min-width:0"><span class="sess-areas">${(x.areas || []).map(areaChip).join("")}</span><span class="meta clamp">${esc(x.worked || x.went || "Practice")}</span></span>
+      <span class="sess-side">${x.minutes ? `<b>${esc(x.minutes)}</b><small>min</small>` : ""}${x.rating ? `<span class="rate r${+x.rating}">${RATINGS[+x.rating - 1]}</span>` : ""}</span></button>`;
+  }
+  function practiceForm() {
+    const ws = S.sess;
+    return `<form id="practiceForm" class="pform" novalidate>
+      <div class="row2"><div class="field"><label for="p-date">Date</label><input id="p-date" type="date" value="${today()}"></div>
+      <div class="field"><label for="p-min">Minutes</label><input id="p-min" inputmode="numeric" placeholder="e.g. 45"></div></div>
+      <fieldset class="field"><legend>What did you work on?</legend><div class="pick">${AREA_NAMES.map(a => `<button type="button" class="pick-btn" data-area="${esc(a)}" aria-pressed="${ws.areas.includes(a)}">${esc(a)}</button>`).join("")}</div></fieldset>
+      <div class="field"><label for="p-worked">What did you practice?</label><textarea id="p-worked" placeholder="e.g. Putting ladder 3 times, 30 balls with the chair drill, 10 bunker shots"></textarea></div>
+      <fieldset class="field"><legend>How did it go?</legend><div class="pick rate-pick">${RATINGS.map((r, i) => `<button type="button" class="pick-btn" data-rate="${i + 1}" aria-pressed="${ws.rating === i + 1}">${r}</button>`).join("")}</div></fieldset>
+      <div class="field"><label for="p-went">What went well, what didn't?</label><textarea id="p-went" placeholder="e.g. Made 7/10 from 6 ft, best yet. Lost focus on the long putts."></textarea></div>
+      <div class="field"><label for="p-next">Next time I'll…</label><textarea id="p-next" placeholder="e.g. Start with long putts while I'm fresh"></textarea></div>
+      <div class="row2"><button type="button" class="btn" data-act="cancel-practice">Cancel</button><button type="submit" class="btn primary">Save practice</button></div></form>`;
+  }
+  function goalsScreen() {
+    const g = goal() || {};
+    const has = GOAL_PERIODS.some(([pk]) => GOAL_FIELDS.some(f => g[pk]?.[f.k]));
+    const val = (pk, k) => { const id = `g-${pk}-${k}`; return id in S.goalDraft ? S.goalDraft[id] : (g[pk]?.[k] || ""); };
+    const mine = myAverages(of("stat"));
+    if (S.calc == null) {
+      const m = String(g.m3?.score || "").match(/\b(6\d|7\d|8\d|9\d|1[01]\d)\b/);
+      S.calc = m ? +m[1] : mine?.score ? Math.max(70, Math.round(mine.score) - 3) : 90;
+    }
+    return top("My goals", S.profile?.name || "") + `<main class="s-content">
+      <details class="card guide" ${has ? "" : "open"}><summary>Why goals matter, and the 4 kinds to set</summary>${GOAL_GUIDE}</details>
+      ${g.coach_note ? `<section class="card coach-note"><h2>Karina's note on your goals ${g.coach_note_at ? `<span>${esc(shortDate(g.coach_note_at))}</span>` : ""}</h2><p>${esc(g.coach_note)}</p></section>` : ""}
+      <form id="goalForm" novalidate class="goal-form">
+        ${GOAL_PERIODS.map(([pk, pl]) => `<section class="card"><h2>${pl}</h2>
+          ${GOAL_FIELDS.map(f => `<div class="field"><label for="g-${pk}-${f.k}">${f.l} <small>${f.hint}</small></label><textarea id="g-${pk}-${f.k}" rows="2" placeholder="${esc(f.ph[pk])}">${esc(val(pk, f.k))}</textarea></div>`).join("")}
+        </section>`).join("")}
+        <button type="submit" class="btn primary">Save my goals</button>
+        ${g.updated_at ? `<p class="muted" style="text-align:center">Last saved ${esc(shortDate(g.updated_at))}. Karina sees your goals.</p>` : `<p class="muted" style="text-align:center">Karina will see your goals and can add a note.</p>`}
+      </form>
+      <section class="card"><h2>What does your score goal take?</h2>
+        <div class="calc"><label for="calc">Target score (18 holes)</label><input id="calc" type="number" inputmode="numeric" min="70" max="110" value="${esc(S.calc)}"></div>
+        <div id="benchOut">${benchmarkTable(S.calc, mine, esc)}</div>
+        <p class="muted">Use these numbers to write your performance goal. Lower scores mostly come from hitting more greens and saving more strokes around the green.</p>
+      </section>
+    </main>`;
   }
   function roundsScreen() {
     const r = byDateDesc(of("stat"));
@@ -133,6 +200,7 @@ export function start(root, { students, onSignOut }) {
       <div class="field"><label for="r-holes">Holes</label><select id="r-holes"><option>18</option><option>9</option></select></div></div>
       <div class="row2"><div class="field"><label for="r-score">Score *</label><input id="r-score" inputmode="numeric"></div><div class="field"><label for="r-putts">Putts</label><input id="r-putts" inputmode="numeric"></div></div>
       <div class="row2"><div class="field"><label for="r-fw">Fairways (e.g. 8/14)</label><input id="r-fw"></div><div class="field"><label for="r-gir">Greens in regulation</label><input id="r-gir" inputmode="numeric"></div></div>
+      <div class="row2"><div class="field"><label for="r-ud">Up & downs (e.g. 3/7)</label><input id="r-ud"></div><div></div></div>
       <div class="field"><label for="r-notes">Note for Karina</label><textarea id="r-notes" placeholder="What went well, what didn't"></textarea></div>
       <div class="row2"><button type="button" class="btn" data-act="cancel-log">Cancel</button><button type="submit" class="btn primary">Save round</button></div></form>`;
   }
@@ -158,7 +226,7 @@ export function start(root, { students, onSignOut }) {
     </main>`;
   }
   function nav() {
-    const items = [["home", "Home"], ["plan", "Plan"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
+    const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
     return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${S.screen === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
@@ -181,6 +249,17 @@ export function start(root, { students, onSignOut }) {
         <div class="stats"><div><b>${esc(r.putts ?? "–") || "–"}</b><small>Putts</small></div><div><b>${esc(r.fairways || "–")}</b><small>Fairways</small></div><div><b>${esc(r.gir ?? "–") || "–"}</b><small>Greens</small></div></div>
         ${r.notes ? `<p>${esc(r.notes)}</p>` : ""}
         ${r.author === "student" ? `<button class="btn danger" data-act="del-round">Delete round</button>` : ""}<button class="btn" data-close="1">Close</button>`);
+    }
+    if (sh.kind === "session") {
+      const x = S.entries.find(e => e.id === sh.id);
+      if (!x) return "";
+      return wrap("Practice", `<h2>Practice${x.minutes ? `, ${esc(x.minutes)} min` : ""}</h2>
+        <p>${esc(fmtDate(x.date))}${x.rating ? ` · felt ${esc(RATINGS[+x.rating - 1].toLowerCase())}` : ""}</p>
+        ${(x.areas || []).length ? `<div class="sess-areas">${x.areas.map(areaChip).join("")}</div>` : ""}
+        ${x.worked ? `<div><h3 class="sh3">What I practiced</h3><p>${esc(x.worked)}</p></div>` : ""}
+        ${x.went ? `<div><h3 class="sh3">How it went</h3><p>${esc(x.went)}</p></div>` : ""}
+        ${x.next ? `<div><h3 class="sh3">Next time</h3><p>${esc(x.next)}</p></div>` : ""}
+        ${x.author === "student" ? `<button class="btn danger" data-act="del-sess">Delete</button>` : ""}<button class="btn" data-close="1">Close</button>`);
     }
     if (sh.kind === "drill") {
       const dr = drillById(sh.id);
@@ -220,19 +299,26 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
     const prevVideo = noteVideo && S.screen === "notes" ? noteVideo.value : "";
     root.innerHTML = `<div class="s-app">${scr}</div>${nav()}${sheetHtml()}`;
-    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && !el.value && v) el.value = v; });
+    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.value !== v) el.value = v; });
     const nv = document.getElementById("noteVideo");
     noteVideo = nv ? videoField(nv, prevVideo, { label: "Attach a swing video" }) : null;
     window.scrollTo(0, y);
     document.body.style.overflow = S.sheet ? "hidden" : "";
   }
-  function go(screen) { S.screen = screen; S.logOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
+  function openPractice() {
+    // Start with the parts of the game from today's plan blocks.
+    const todays = plan().filter(x => x.day === DAYS[todayIndex()]);
+    S.sess = { areas: [...new Set(todays.map(x => x.area).filter(a => AREA_NAMES.includes(a)))], rating: 0 };
+    S.screen = "plan"; S.practiceOpen = true; S.logOpen = false; S.sheet = null; render();
+    const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
+  }
+  function go(screen) { S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
   function openScore(entryId, drillId) {
     const p = S.entries.find(e => e.id === entryId);
     const dr = drillById(drillId || p?.drill);
@@ -252,6 +338,10 @@ export function start(root, { students, onSignOut }) {
     if (t.closest("[data-close]")) { S.sheet = null; render(); return; }
     const op = t.closest("[data-open]"); if (op) { S.sheet = { kind: "detail", id: op.dataset.open }; render(); return; }
     const rd = t.closest("[data-round]"); if (rd) { S.sheet = { kind: "round", id: rd.dataset.round }; render(); return; }
+    const ss = t.closest("[data-sess]"); if (ss) { S.sheet = { kind: "session", id: ss.dataset.sess }; render(); return; }
+    const ar = t.closest("[data-area]");
+    if (ar) { const n = ar.dataset.area, A = S.sess.areas; S.sess.areas = A.includes(n) ? A.filter(x => x !== n) : A.concat(n); render(); return; }
+    const rt = t.closest("[data-rate]"); if (rt) { const v = +rt.dataset.rate; S.sess.rating = S.sess.rating === v ? 0 : v; render(); return; }
     const dl = t.closest("[data-drill]"); if (dl) { S.sheet = { kind: "drill", id: dl.dataset.drill }; render(); return; }
     const sw = t.closest("[data-switch]"); if (sw) { select(sw.dataset.switch); return; }
     const stp = t.closest("[data-step]");
@@ -263,9 +353,11 @@ export function start(root, { students, onSignOut }) {
     const a = t.closest("[data-act]"); if (!a) return;
     const act = a.dataset.act;
     if (act === "menu") { S.sheet = { kind: "menu" }; render(); return; }
-    if (act === "signout") { if (stopWatch) stopWatch(); await api.signOut(); document.body.style.overflow = ""; root.onclick = root.onchange = root.onsubmit = null; onSignOut(); return; }
+    if (act === "signout") { if (stopWatch) stopWatch(); await api.signOut(); document.body.style.overflow = ""; root.onclick = root.onchange = root.onsubmit = root.oninput = null; onSignOut(); return; }
     if (act === "log") { S.screen = "rounds"; S.logOpen = true; S.sheet = null; render(); window.scrollTo(0, 0); return; }
     if (act === "cancel-log") { S.logOpen = false; render(); return; }
+    if (act === "practice") { openPractice(); return; }
+    if (act === "cancel-practice") { S.practiceOpen = false; render(); return; }
     if (act === "to-score") { openScore(S.sheet.id); return; }
     if (act === "score-drill") { const id = S.sheet.id; S.sheet = { kind: "score", id, drill: id, val: 0 }; openScore(id, id); return; }
     if (act === "mark-done" || act === "undo-done") {
@@ -281,6 +373,12 @@ export function start(root, { students, onSignOut }) {
         await api.addScore(S.sid, dr.id, val, +dr.of || 10, today());
         if (p && p.type === "plan" && !p.done) await api.setPlanDone(p.id, true);
       }, dr.goal && val >= +dr.goal ? "Target hit! Karina will see it." : "Score saved. Karina will see it.");
+      return;
+    }
+    if (act === "del-sess") {
+      if (!a.classList.contains("armed")) { a.classList.add("armed"); a.textContent = "Tap again to delete"; setTimeout(() => { a.classList.remove("armed"); a.textContent = "Delete"; }, 3500); return; }
+      const id = S.sheet.id; S.sheet = null;
+      await run(() => api.deleteEntry(id), "Practice deleted");
       return;
     }
     if (act === "del-round") {
@@ -303,9 +401,24 @@ export function start(root, { students, onSignOut }) {
       const f = k => root.querySelector("#r-" + k).value.trim();
       const num = v => v === "" || isNaN(+v) ? "" : +v;
       if (f("score") === "" || isNaN(+f("score"))) { toast("Add your score to save the round."); root.querySelector("#r-score").focus(); return; }
-      const d = { date: f("date") || today(), event: f("event"), course: f("course"), holes: f("holes"), score: +f("score"), putts: num(f("putts")), fairways: f("fw"), gir: num(f("gir")), notes: f("notes") };
+      const d = { date: f("date") || today(), event: f("event"), course: f("course"), holes: f("holes"), score: +f("score"), putts: num(f("putts")), fairways: f("fw"), gir: num(f("gir")), updown: f("ud"), notes: f("notes") };
       const ok = await run(() => api.addEntry(S.sid, "stat", d), "Round saved");
       if (ok) { S.logOpen = false; render(); }
+    }
+    if (e.target.id === "practiceForm") {
+      const f = k => root.querySelector("#p-" + k).value.trim();
+      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
+      if (!d.worked && !d.went && !d.areas.length && d.minutes === "") { toast("Add what you practiced first."); return; }
+      const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved. Karina will see it.");
+      if (ok) { S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
+    }
+    if (e.target.id === "goalForm") {
+      const g = goal();
+      const d = {};
+      GOAL_PERIODS.forEach(([pk]) => { d[pk] = {}; GOAL_FIELDS.forEach(f => { d[pk][f.k] = root.querySelector(`#g-${pk}-${f.k}`).value.trim(); }); });
+      if (!GOAL_PERIODS.some(([pk]) => GOAL_FIELDS.some(f => d[pk][f.k]))) { toast("Write at least one goal first."); return; }
+      const ok = await run(() => g ? api.updateEntry(g, d) : api.addEntry(S.sid, "goal", d), "Goals saved. Karina will see them.");
+      if (ok) { S.goalDraft = {}; render(); }
     }
     if (e.target.id === "noteForm") {
       const text = root.querySelector("#note").value.trim();
@@ -316,6 +429,15 @@ export function start(root, { students, onSignOut }) {
       if (noteVideo) noteVideo.value = "";
       const ok = await run(() => api.addEntry(S.sid, "note", video_pid ? { text, video_pid } : { text }), video_pid ? "Video sent to Karina" : "Sent to Karina");
       if (!ok) root.querySelector("#note").value = text;
+    }
+  };
+
+  root.oninput = e => {
+    const id = e.target.id || "";
+    if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
+    if (id === "calc") {
+      const v = +e.target.value;
+      if (v >= 60 && v <= 130) { S.calc = v; const out = document.getElementById("benchOut"); if (out) out.innerHTML = benchmarkTable(v, myAverages(of("stat")), esc); }
     }
   };
 
