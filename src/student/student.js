@@ -2,7 +2,8 @@ import "./student.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
-import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
+import { benchmarkTable, myAverages, biggestGap } from "../lib/benchmarks.js";
+import { PLACES, GAMES, levelOf, buildSession, focusFor } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
 
@@ -22,7 +23,8 @@ export function start(root, { students, onSignOut }) {
   const S = {
     students, sid: null, profile: null, entries: [], scores: [],
     screen: "home", sheet: null, logOpen: false, loading: true,
-    practiceOpen: false, sess: { areas: [], rating: 0 }, goalDraft: {}, calc: null
+    practiceOpen: false, sess: { areas: [], rating: 0 }, goalDraft: {}, calc: null,
+    game: { place: "range", minutes: 30, focus: "auto", seed: 0, ai: null, aiBusy: false }, aiAvailable: null
   };
   try { const saved = localStorage.getItem("sph.student"); if (students.some(s => s.id === saved)) S.sid = saved; } catch {}
   if (!S.sid) S.sid = students[0].id;
@@ -60,6 +62,21 @@ export function start(root, { students, onSignOut }) {
   const goal = () => of("goal")[0] || null;
   const sessions = () => byDateDesc(of("session"));
   const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - todayIndex()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const targetScore = () => {
+    const m = String(goal()?.m3?.score || "").match(/\b(6\d|7\d|8\d|9\d|1[01]\d)\b/);
+    const mine = myAverages(of("stat"));
+    return m ? +m[1] : mine?.score ? Math.max(70, Math.round(mine.score) - 3) : 90;
+  };
+  const autoFocus = () => {
+    const gap = biggestGap(targetScore(), myAverages(of("stat")));
+    const g = goal() || {};
+    return focusFor({ gapName: gap?.name, goalsText: [S.profile?.goals, ...["m3", "m6"].flatMap(k => Object.values(g[k] || {}))].join(" ") });
+  };
+  const currentSession = () => {
+    const G = S.game, auto = G.focus === "auto" ? autoFocus() : null;
+    const focus = G.focus === "auto" ? auto?.key : G.focus;
+    return { games: buildSession({ place: G.place, minutes: G.minutes, level: levelOf(S.profile?.handicap), focus, seed: G.seed }), focus, why: auto?.why || "" };
+  };
   const firstName = () => String(S.profile?.name || "").split(/\s+/)[0];
 
   // ---------- pieces
@@ -114,7 +131,8 @@ export function start(root, { students, onSignOut }) {
           return lines.length ? `<button class="goal-peek" data-go="goals">${lines.map(([k, v]) => `<span><b>${k}:</b> ${esc(v)}</span>`).join("")}<small>Your 3-month goals ›</small></button>`
             : `<button class="btn" data-go="goals">Set your goals</button>`; })()}
       </section>
-      <button class="btn primary" data-act="practice">Log today's practice</button>
+      <button class="btn primary" data-go="games">Get a practice game</button>
+      <button class="btn" data-act="practice">Log today's practice</button>
       <div class="row2"><button class="btn" data-act="log">Log a round</button><button class="btn" data-go="notes">Send Karina a swing</button></div>
     </main>`;
   }
@@ -125,7 +143,9 @@ export function start(root, { students, onSignOut }) {
       <section class="card"><h2>What you're working on</h2>${focusBar(p, x => x.minutes, x => x.area)}</section>
       ${DAYS.map((d, i) => { const b = p.filter(x => x.day === d); if (!b.length) return ""; return `<section class="card"><h2>${d}${i === ti ? " · today" : ""} <span>${b.reduce((a, x) => a + (+x.minutes || 0), 0)} min</span></h2>${b.map(task).join("")}</section>`; }).join("")}
       <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p>`;
-    return top("This week", S.profile?.name || "") + `<main class="s-content">${planPart}${practiceLog()}</main>`;
+    return top("This week", S.profile?.name || "") + `<main class="s-content">
+      <button class="games-cta" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game. Tap to get a session.</span></button>
+      ${planPart}${practiceLog()}</main>`;
   }
   function practiceLog() {
     const all = sessions(), ws = weekStart();
@@ -155,6 +175,41 @@ export function start(root, { students, onSignOut }) {
       <div class="field"><label for="p-next">Next time I'll…</label><textarea id="p-next" placeholder="e.g. Start with long putts while I'm fresh"></textarea></div>
       <div class="row2"><button type="button" class="btn" data-act="cancel-practice">Cancel</button><button type="submit" class="btn primary">Save practice</button></div></form>`;
   }
+  function gamesScreen() {
+    const G = S.game, lvl = levelOf(S.profile?.handicap);
+    const { games, why } = currentSession();
+    const total = games.reduce((a, g) => a + g.min, 0);
+    const FOCUS = [["auto", "Pick for me"], ["putts", "Putting"], ["gir", "Hitting greens"], ["fairways", "Fairways"], ["updown", "Up & downs"], ["mental", "Mental"]];
+    const ai = G.ai && G.ai.key === sessionKey(games) ? G.ai : null;
+    const tipFor = id => ai?.games?.find(x => x.id === id);
+    const pick = (attr, list, cur) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn" ${attr}="${esc(v)}" aria-pressed="${String(cur) === String(v)}">${esc(l)}</button>`).join("")}</div>`;
+    return top("Practice games", S.profile?.name || "") + `<main class="s-content">
+      <section class="card">
+        <fieldset class="field"><legend>Where are you practicing?</legend>${pick("data-gplace", PLACES, G.place)}</fieldset>
+        <fieldset class="field"><legend>How much time do you have?</legend>${pick("data-gmin", (G.place === "course" ? [60, 90, 120] : [15, 30, 45, 60]).map(m => [m, m + " min"]), G.minutes)}</fieldset>
+        <fieldset class="field"><legend>What do you want to work on?</legend>${pick("data-gfocus", FOCUS, G.focus)}</fieldset>
+      </section>
+      ${games.length ? `
+      <section class="card session-head"><h2>Your session <span>${total} min · ${games.length} game${games.length > 1 ? "s" : ""}</span></h2>
+        ${why ? `<p class="why">${esc(why)}</p>` : ""}
+        ${ai?.intro ? `<p class="ai-intro"><b>Tailored for you:</b> ${esc(ai.intro)}</p>` : ""}
+        <p class="muted">Warm up first: 5 minutes of easy swings or short putts before the first game.</p></section>
+      ${games.map((g, i) => { const t = tipFor(g.id); return `<section class="card game">
+        <div class="game-top"><span class="gnum">${i + 1}</span><div style="min-width:0"><h3>${esc(g.name)}</h3><div class="gmeta">${areaChip(g.area)}<span>${g.min} min</span></div></div></div>
+        <p>${esc(g.setup)}</p>
+        <ol>${g.steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+        <div class="gscore"><div><b>Score</b><span>${esc(g.score)}</span></div><div><b>Your target</b><span>${esc(t?.target || g.pass[lvl])}</span></div></div>
+        ${t?.tip ? `<p class="ai-tip"><b>For you:</b> ${esc(t.tip)}</p>` : ""}
+        <p class="twist"><b>Make it harder:</b> ${esc(g.twist)}</p>
+      </section>`; }).join("")}
+      <div class="row2"><button class="btn" data-act="game-shuffle">Different games</button>${S.aiAvailable ? `<button class="btn" data-act="game-ai" ${G.aiBusy ? "disabled" : ""}>${G.aiBusy ? "Thinking…" : ai ? "Tailor again" : "✨ Tailor to me"}</button>` : "<span></span>"}</div>
+      <button class="btn primary" data-act="game-log">Done? Log this practice</button>`
+      : `<div class="card"><p class="muted">No games for that choice yet. Try another place or more time.</p></div>`}
+      <p class="muted" style="text-align:center">Targets are set for your level. Write your scores in the practice log so Karina can see them.</p>
+    </main>`;
+  }
+  const sessionKey = games => games.map(g => g.id).join(",") + "|" + S.game.minutes;
+
   function goalsScreen() {
     const g = goal() || {};
     const has = GOAL_PERIODS.some(([pk]) => GOAL_FIELDS.some(f => g[pk]?.[f.k]));
@@ -227,7 +282,7 @@ export function start(root, { students, onSignOut }) {
   }
   function nav() {
     const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${S.screen === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${(S.screen === "games" ? "plan" : S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -302,7 +357,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -321,6 +376,33 @@ export function start(root, { students, onSignOut }) {
     S.sess = { areas: [...new Set(todays.map(x => x.area).filter(a => AREA_NAMES.includes(a)))], rating: 0 };
     S.screen = "plan"; S.practiceOpen = true; S.logOpen = false; S.sheet = null; render();
     const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
+  }
+  // Opens the practice log filled in with this session's games, ready for scores.
+  function logGames() {
+    const { games } = currentSession();
+    draft.set(`${S.sid}.p-worked`, games.map(g => `${g.name}: score ___ (${g.score.replace(/\.$/, "")})`).join("\n"));
+    draft.set(`${S.sid}.p-min`, String(games.reduce((a, g) => a + g.min, 0)));
+    S.sess = { areas: [...new Set(games.map(g => g.area).filter(a => AREA_NAMES.includes(a)))], rating: 0, games: games.map(g => g.id) };
+    S.screen = "plan"; S.practiceOpen = true; S.sheet = null; render();
+    const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
+  }
+  async function tailor() {
+    const { games, focus } = currentSession();
+    if (!games.length) return;
+    S.game.aiBusy = true; render();
+    try {
+      const g = goal() || {};
+      const mine = myAverages(of("stat"));
+      const recent = sessions().slice(0, 3).map(x => [x.worked, x.went, x.next].filter(Boolean).join(" / ")).filter(Boolean);
+      const drills = of("drill").filter(d => d.status !== "Mastered").map(d => d.name);
+      const res = await api.tailorSession({
+        place: S.game.place, minutes: S.game.minutes, focus,
+        games: games.map(x => ({ id: x.id, name: x.name, setup: x.setup, score: x.score, target: x.pass[levelOf(S.profile?.handicap)] })),
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent }
+      });
+      S.game.ai = { ...res, key: sessionKey(games) };
+    } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't tailor right now. The games still work as they are."); }
+    S.game.aiBusy = false; render();
   }
   function go(screen) { S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
   function openScore(entryId, drillId) {
@@ -346,6 +428,9 @@ export function start(root, { students, onSignOut }) {
     const ar = t.closest("[data-area]");
     if (ar) { const n = ar.dataset.area, A = S.sess.areas; S.sess.areas = A.includes(n) ? A.filter(x => x !== n) : A.concat(n); render(); return; }
     const rt = t.closest("[data-rate]"); if (rt) { const v = +rt.dataset.rate; S.sess.rating = S.sess.rating === v ? 0 : v; render(); return; }
+    const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
+    const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
+    const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; render(); return; }
     const dl = t.closest("[data-drill]"); if (dl) { S.sheet = { kind: "drill", id: dl.dataset.drill }; render(); return; }
     const sw = t.closest("[data-switch]"); if (sw) { select(sw.dataset.switch); return; }
     const stp = t.closest("[data-step]");
@@ -361,6 +446,9 @@ export function start(root, { students, onSignOut }) {
     if (act === "log") { S.screen = "rounds"; S.logOpen = true; S.sheet = null; render(); window.scrollTo(0, 0); return; }
     if (act === "cancel-log") { S.logOpen = false; render(); return; }
     if (act === "practice") { openPractice(); return; }
+    if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; render(); window.scrollTo(0, 0); return; }
+    if (act === "game-log") { logGames(); return; }
+    if (act === "game-ai") { tailor(); return; }
     if (act === "cancel-practice") { S.practiceOpen = false; render(); return; }
     if (act === "to-score") { openScore(S.sheet.id); return; }
     if (act === "score-drill") { const id = S.sheet.id; S.sheet = { kind: "score", id, drill: id, val: 0 }; openScore(id, id); return; }
@@ -411,7 +499,7 @@ export function start(root, { students, onSignOut }) {
     }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();
-      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
+      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
       if (!d.worked && !d.went && !d.areas.length && d.minutes === "") { toast("Add what you practiced first."); return; }
       const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved. Karina will see it.");
       if (ok) { clearDrafts("practiceForm"); S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
@@ -450,5 +538,6 @@ export function start(root, { students, onSignOut }) {
 
   bindPlayer(root);
   api.touchSeen();
+  api.tailorAvailable().then(v => { S.aiAvailable = v; if (S.screen === "games") render(); }).catch(() => { S.aiAvailable = false; });
   select(S.sid);
 }

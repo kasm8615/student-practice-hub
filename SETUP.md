@@ -88,3 +88,12 @@ Supabase SQL Editor → run `supabase/update-2.sql` (no values to replace; it us
 - Students get a **Goals** tab (3- and 6-month score, performance, mental and practice-habit goals, plus a score calculator based on Break X Golf's averages from 3,788 amateur rounds). Karina adds a note from the student's Goals tab.
 - Students log practice sessions from Home or the Plan tab. Karina sees them under **Practice log** and in the check-in.
 - Emails: Karina gets one when a student logs practice or sets goals. Students (and parents) get one when Karina sends a note or video, or logs a lesson. Replies go to Karina.
+
+## Practice games (optional AI)
+
+Students tap **Get a practice game** (Home) or **Practice games** (Plan). They pick where they are, how long they have and what to work on; the app builds a session from the library in `src/lib/scenarios.js` (range, short game, putting, on-course and mental games, with targets for three levels). "Pick for me" uses their biggest stat gap from logged rounds, or their goals.
+
+To switch on **✨ Tailor to me** (personal tips and targets written by Claude):
+1. console.anthropic.com → sign up → add a small credit (e.g. $5) → **API Keys → Create Key**.
+2. Cloudflare → student-practice-hub → **Settings → Variables and Secrets** → add `ANTHROPIC_API_KEY` as type **Secret**.
+3. Redeploy (any push). Each tailored session costs well under 1 cent. Without the key, the button simply doesn't show.

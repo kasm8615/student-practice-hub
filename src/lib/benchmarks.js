@@ -41,6 +41,21 @@ export function myAverages(rounds, n = 5) {
 
 const f1 = v => (v == null ? "–" : (Math.round(v * 10) / 10).toString());
 
+// The stat where the student is furthest behind golfers who shoot the target score.
+// Scaled so stats compare: a green ≈ a stroke, a putt = a stroke, a fairway ≈ ⅓ stroke, 10% up & down ≈ 1 stroke.
+export function biggestGap(target, mine) {
+  if (!mine) return null;
+  const b = benchmark(target);
+  const rows = [["Greens in regulation", b.gir, mine.gir, 1, 1], ["Fairways hit", b.fairways, mine.fairways, 1, 0.35], ["Putts", b.putts, mine.putts, -1, 1], ["Up & down", b.updown, mine.updown, 1, 0.1]];
+  let best = null;
+  rows.forEach(([name, t, m, dir, w]) => {
+    if (m == null) return;
+    const gap = (dir > 0 ? t - m : m - t) * w;
+    if (gap > 0.25 && (!best || gap > best.gap)) best = { name, gap, t, m };
+  });
+  return best;
+}
+
 // A small table: target vs the student's own averages, with the biggest gap called out.
 export function benchmarkTable(target, mine, esc) {
   const b = benchmark(target);
@@ -50,14 +65,7 @@ export function benchmarkTable(target, mine, esc) {
     ["Putts", b.putts, mine?.putts, "per round", -1],
     ["Up & down", b.updown, mine?.updown, "%", 1]
   ];
-  // Biggest gap, scaled so stats are comparable (a green ≈ a stroke, a putt = a stroke, fairway ≈ ⅓ stroke, up&down 10% ≈ 1 stroke).
-  const weight = { "Greens in regulation": 1, "Fairways hit": 0.35, "Putts": 1, "Up & down": 0.1 };
-  let best = null;
-  rows.forEach(([name, t, m, , dir]) => {
-    if (m == null) return;
-    const gap = (dir > 0 ? t - m : m - t) * weight[name];
-    if (gap > 0.25 && (!best || gap > best.gap)) best = { name, gap, t, m };
-  });
+  const best = biggestGap(target, mine);
   return `<div class="bench">
     <table><thead><tr><th>To shoot ${esc(Math.round(target))}</th><th class="n">Typical</th><th class="n">You</th></tr></thead>
     <tbody>${rows.map(([name, t, m, unit]) => `<tr><td>${name} <small>${unit}</small></td><td class="n"><b>${f1(t)}</b></td><td class="n">${f1(m)}</td></tr>`).join("")}</tbody></table>

@@ -3,6 +3,7 @@ import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
+import { GAMES } from "../lib/scenarios.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
@@ -373,7 +374,8 @@ export function start(root, { onSignOut }) {
       ${r.length ? `<div class="entries">${r.map(e => { const dp = dateParts(e.date); return `<div class="entry">
         <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
         <div><div class="t">${(e.areas || []).map(areaChip).join(" ") || "Practice"}</div>
-          ${e.worked ? `<div class="body"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}${e.went ? `<div class="body"><b>How it went:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>Next time:</b> ${esc(e.next)}</div>` : ""}</div>
+          ${e.games?.length ? `<div class="body"><b>Practice games:</b> ${e.games.map(id => esc(GAMES.find(g => g.id === id)?.name || id)).join(", ")}</div>` : ""}
+          ${e.worked ? `<div class="body" style="white-space:pre-wrap"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}${e.went ? `<div class="body"><b>How it went:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>Next time:</b> ${esc(e.next)}</div>` : ""}</div>
         <div style="text-align:right">${e.minutes ? `<div class="hcp" style="font-size:18px">${esc(e.minutes)} min</div>` : ""}${e.rating ? `<span class="pill ${+e.rating >= 4 ? "good" : +e.rating === 3 ? "warn" : "bad"}">${RATINGS[+e.rating - 1]}</span>` : ""}</div></div>`; }).join("")}</div>`
         : `<div class="empty">No practice logged yet. ${first} logs sessions from the Plan screen or Home.</div>`}`;
   }

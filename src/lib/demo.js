@@ -81,5 +81,10 @@ export const demoApi = {
   async deleteScore(id) { db.scores = db.scores.filter(s => s.id !== id); ping(); },
   async videoStart() { throw new Error("Video uploads don't work in the preview."); },
   async videoStatus() { return { status: "errored" }; },
+  async tailorAvailable() { return true; },
+  async tailorSession(p) {
+    await new Promise(r => setTimeout(r, 400));
+    return { intro: "Your putting is close to target, but you're averaging 5 greens. Today is about solid contact into greens, then distance control.", games: p.games.map((g, i) => ({ id: g.id, target: i === 0 ? "8 / 18" : g.target, tip: i === 0 ? "Use your chair drill feel on the first 3 holes before you start counting." : "Write down the club you used for each miss." })) };
+  },
   watch(_ids, fn) { listeners.add(fn); return () => listeners.delete(fn); }
 };

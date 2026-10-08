@@ -64,6 +64,20 @@ export const api = {
     return res.json().catch(() => ({ status: "unknown" }));
   },
 
+  // ---- AI-tailored practice games (through the /api/scenario function)
+  async tailorAvailable() {
+    const res = await fetch("/api/scenario");
+    if (!res.ok) return false;
+    return !!(await res.json().catch(() => ({}))).ai;
+  },
+  async tailorSession(payload) {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const res = await fetch("/api/scenario", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Couldn't tailor right now.");
+    return body;
+  },
+
   // ---- live updates: calls onChange whenever entries or scores change for these students
   watch(studentIds, onChange) {
     const ch = supabase.channel("changes-" + Math.random().toString(36).slice(2));
