@@ -157,8 +157,76 @@ export const GAMES = [
     setup: "Play 9 holes with one goal: never 3-putt.",
     steps: ["On every first putt longer than 15 feet, your only job is speed: get it inside 3 feet.", "Mark each green: 1, 2 or 3 putts.", "Log the round with your putts afterwards."],
     score: "3-putts in 9 holes.", pass: ["2 or fewer", "1 or fewer", "0"],
-    twist: "Most extra putts come from bad speed on long putts, not missed short ones." }
+    twist: "Most extra putts come from bad speed on long putts, not missed short ones." },
+
+  // ---------- Swing change
+  { id: "slowreps", name: "Slow-motion reps", area: "Full swing", place: "range", min: 20, helps: ["gir"], only: "swing",
+    setup: "Your swing change from Karina's last lesson. A mid iron, no target needed.",
+    steps: ["10 rehearsal swings without a ball at half speed. Exaggerate the new feel.", "10 balls at half speed. Stop at the finish and check your position.", "10 balls at three-quarter speed keeping the same feel.", "Ball flight doesn't matter today. Only the feel."],
+    score: "Reps where you felt the new move, out of 20 balls.", pass: ["10 / 20", "13 / 20", "16 / 20"],
+    twist: "It's normal to hit it worse for a while during a swing change. Don't go back to the old swing to chase good shots." },
+  { id: "video3", name: "Film and compare", area: "Full swing", place: "range", min: 15, helps: ["gir"], only: "swing",
+    setup: "Prop your phone at hip height, behind you looking down the target line (same angle as your lesson video).",
+    steps: ["Film 3 normal swings.", "Watch them next to Karina's lesson video or her notes. Is the change showing up?", "Hit 10 balls working on what you saw, then film 3 more.", "Send the best one to Karina from the Notes tab."],
+    score: "Did the change show up on the second video? Yes / partly / no.", pass: ["partly", "partly", "yes"],
+    twist: "Feel and real are often different. The video tells you the truth." },
+  { id: "blockrandom", name: "Drill, then ball, then target", area: "Full swing", place: "range", min: 25, helps: ["gir"], only: "swing",
+    setup: "One club. Karina's drill for your swing change.",
+    steps: ["5 balls doing the drill exactly as Karina showed you.", "5 balls with a normal swing keeping the drill feel, no target.", "5 balls at a target with your full routine. Did the feel stay?", "Repeat the cycle 2 or 3 times."],
+    score: "Target shots where you kept the new feel, out of 15.", pass: ["5 / 15", "8 / 15", "11 / 15"],
+    twist: "This bridge from drill to target is how a swing change makes it to the course." },
+
+  // ---------- Tournament week
+  { id: "warmup", name: "Rehearse your pre-round warm-up", area: "Mental", place: "range", min: 30, helps: ["mental"], only: "tournament",
+    setup: "Do the exact warm-up you'll do on tournament day, timed.",
+    steps: ["5 min stretching, then wedges, mid irons, hybrid or wood, driver: 5 balls each.", "Last 5 balls: play the first 3 holes of the course on the range.", "10 min on the putting green: 5 lag putts, then 3-footers until you make 5 in a row.", "No fixing. Today you play with what you've got."],
+    score: "Did you finish the whole routine in the time you'll have? Yes / no.", pass: ["yes", "yes", "yes"],
+    twist: "Write your warm-up on a card and keep it in your bag for tournament day." },
+  { id: "gameplan", name: "Course game plan", area: "On course", place: "course", min: 30, helps: ["mental", "fairways"], only: "tournament",
+    setup: "The tournament course scorecard or a map app. Can be done at home.",
+    steps: ["For every hole, pick your tee club and the side of the fairway to aim for.", "Mark where NOT to miss (water, out of bounds, short-sided).", "Pick a safe target on any hole that scares you.", "Write it on your scorecard or in your notes."],
+    score: "Holes with a clear plan, out of 18.", pass: ["18 / 18", "18 / 18", "18 / 18"],
+    twist: "Share your plan with Karina in Notes. She'll check it." },
+
+  // ---------- With friends
+  { id: "closest", name: "Closest to the pin", area: "Full swing", place: "range", min: 15, helps: ["gir"], only: "fun",
+    setup: "Play with friends. Everyone picks one club and the same target.",
+    steps: ["Each player hits one ball. Closest wins the point.", "Winner picks the next club and target.", "Play to 7 points."],
+    score: "Points won.", pass: ["2", "3", "4"],
+    twist: "Losers pick up the balls." },
+  { id: "horse", name: "Putting HORSE", area: "Putting", place: "putting", min: 15, helps: ["putts"], only: "fun",
+    setup: "2 or more players on a putting green.",
+    steps: ["First player picks any putt. If they make it, everyone else has to make the same putt.", "Miss and you get a letter: H, O, R, S, E.", "Spell HORSE and you're out."],
+    score: "Did you win?", pass: ["played a full game", "won a game", "won 2 games"],
+    twist: "Long putts only count if they finish within a putter length." },
+  { id: "chipoff", name: "Chip-off", area: "Short game", place: "short", min: 15, helps: ["updown"], only: "fun",
+    setup: "2 or more players around a practice green.",
+    steps: ["Take turns picking a spot. Everyone chips one ball.", "Closest gets 1 point, a chip-in gets 3.", "First to 10 wins."],
+    score: "Points scored.", pass: ["3", "5", "7"],
+    twist: "Winner of each hole has to chip the next one with a different club." }
 ];
+
+// What a week looks like for each kind of student week.
+export const WEEKS = [
+  ["normal", "Just improving"],
+  ["tournament", "Tournament this week"],
+  ["swing", "Working on a swing change"],
+  ["fun", "Playing with friends"]
+];
+// Games that suit each week, best first. Games marked "only" show up only in their week.
+const WEEK_PICKS = {
+  tournament: ["warmup", "range9", "random", "routine", "musthit", "updown9", "par18", "worst", "five5", "lag", "circle", "putt18", "gameplan", "routineRound", "nothree", "from150", "stat9"],
+  swing: ["slowreps", "blockrandom", "video3", "corridor", "stock", "wedgeladder", "towel", "pitchladder", "bunker", "gate", "ladderup", "lag", "stat9", "oneclub"],
+  fun: ["closest", "range9", "trouble", "chipoff", "par18", "horse", "putt18", "worst", "scramble", "stat9"]
+};
+export const WEEK_TIPS = {
+  tournament: d => d != null && d <= 2
+    ? "Tournament in " + (d <= 0 ? "less than a day" : d === 1 ? "1 day" : "2 days") + ": keep practice short. Warm-up rehearsal, short game and putting, then rest. No swing changes now."
+    : "Tournament week: practice like you'll play. Change clubs and targets every shot, keep score, use your full routine. Fix nothing big; trust what you have.",
+  swing: () => "Swing change week: slow reps, lots of them, one feel at a time. Film yourself. Bad shots are normal right now. Don't chase results.",
+  fun: () => "Playing with friends: keep it fun and competitive. A quick warm-up and some games you can play together.",
+  normal: () => ""
+};
 
 const LEVELS = ["beginner", "mid", "advanced"];
 export const levelOf = hcp => { const h = parseFloat(hcp); return isNaN(h) ? 1 : h >= 20 ? 0 : h >= 10 ? 1 : 2; };
@@ -176,8 +244,23 @@ export function focusFor({ gapName, goalsText }) {
 }
 
 // Builds a session for a place and time: first game targets the focus, the rest fill the time.
-export function buildSession({ place, minutes, level, focus, seed = 0, exclude = [] }) {
-  const fits = GAMES.filter(g => g.place === place && (!g.level || level === 2) && !exclude.includes(g.id));
+export function buildSession({ place, minutes, level, focus, seed = 0, exclude = [], week = "normal", extra = [], daysOut = null }) {
+  let fits = extra.filter(g => g.place === place).concat(GAMES.filter(g => g.place === place && (!g.level || level === 2) && (!g.only || g.only === week) && !exclude.includes(g.id)));
+  const picks = WEEK_PICKS[week];
+  if (picks) {
+    // Week games first (in their order), then the rest. Close to a tournament: short game and putting only, short sessions.
+    const rank = g => g.drill ? -1 : picks.includes(g.id) ? picks.indexOf(g.id) : 99;
+    fits = fits.slice().sort((a, b) => rank(a) - rank(b));
+    if (week === "tournament" && daysOut != null && daysOut <= 2) minutes = Math.min(minutes, 45);
+    const top = fits.filter(g => rank(g) < 99);
+    const pool = top.length ? top : fits;
+    const picked = []; let left = minutes;
+    for (const g of [...pool.slice(seed % Math.max(1, pool.length)), ...pool.slice(0, seed % Math.max(1, pool.length))]) {
+      if (g.min <= left || (!picked.length)) { picked.push(g); left -= g.min; }
+      if (left < 10 || picked.length >= 3 || place === "course") break;
+    }
+    return picked;
+  }
   const rot = (arr, n) => arr.length ? arr.slice(n % arr.length).concat(arr.slice(0, n % arr.length)) : arr;
   const first = rot(fits.filter(g => !focus || g.helps.includes(focus)), seed);
   const rest = rot(fits, seed * 3 + 1);
@@ -190,4 +273,15 @@ export function buildSession({ place, minutes, level, focus, seed = 0, exclude =
   }
   if (!picked.length && fits.length) picked.push(first[0] || rest[0]);
   return picked;
+}
+
+// Karina's assigned drills, as session games (used in swing-change weeks).
+export function drillGames(drills) {
+  const placeOf = c => c === "Putting" ? "putting" : c === "Short game" || c === "Pitching" || c === "Chipping" || c === "Bunker" ? "short" : "range";
+  return drills.filter(d => d.status !== "Mastered").map(d => ({
+    id: "drill-" + d.id, drill: true, name: d.name + " (Karina's drill)", area: d.category || "Full swing", place: placeOf(d.category), min: 15, helps: [],
+    setup: d.notes || "The drill from your lesson.", steps: ["Do the drill exactly as Karina showed you, slowly at first.", d.goal ? `Then score it: ${d.target || "successful reps"}.` : "Then do 10 reps at normal speed keeping the feel.", "Log your score on the drill in the Lessons tab."],
+    score: d.goal ? `${d.target || "Successful reps"}, out of ${d.of || 10}.` : "Reps with the right feel.", pass: Array(3).fill(d.goal ? `${d.goal} / ${d.of || 10}` : "7 / 10"),
+    twist: "Film one rep and send it to Karina."
+  }));
 }

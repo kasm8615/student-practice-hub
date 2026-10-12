@@ -4,7 +4,7 @@ import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
-import { PLACES, GAMES, levelOf, buildSession, focusFor } from "../lib/scenarios.js";
+import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
 
@@ -25,7 +25,7 @@ export function start(root, { students, onSignOut }) {
     students, sid: null, profile: null, entries: [], scores: [],
     screen: "home", sheet: null, logOpen: false, loading: true,
     practiceOpen: false, sess: { areas: [], rating: 0 }, goalDraft: {}, calc: null,
-    game: { place: "range", minutes: 30, focus: "auto", seed: 0, ai: null, aiBusy: false, pin: null }, aiAvailable: null, reviews: {}
+    game: { place: "range", minutes: 30, focus: "auto", seed: 0, ai: null, aiBusy: false, pin: null, week: "normal", tdate: "" }, aiAvailable: null, reviews: {}
   };
   try { const saved = localStorage.getItem("sph.student"); if (students.some(s => s.id === saved)) S.sid = saved; } catch {}
   if (!S.sid) S.sid = students[0].id;
@@ -42,6 +42,7 @@ export function start(root, { students, onSignOut }) {
   }
   function select(id) {
     S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false; S.live = draft.get(`${id}.live`); S.liveSetup = null;
+    { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
     stopWatch = api.watch([id], () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 400); });
@@ -73,11 +74,19 @@ export function start(root, { students, onSignOut }) {
     const g = goal() || {};
     return focusFor({ gapName: gap?.name, goalsText: [S.profile?.goals, ...["m3", "m6"].flatMap(k => Object.values(g[k] || {}))].join(" ") });
   };
+  const daysOut = () => { const t = S.game.tdate; if (!t) return null; return Math.round((new Date(t + "T12:00:00") - new Date(today() + "T12:00:00")) / 864e5); };
+  const saveWeek = () => {
+    // Remembered for 7 days (or until the tournament).
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    const until = S.game.week === "tournament" && S.game.tdate ? S.game.tdate : d.toISOString().slice(0, 10);
+    if (S.game.week === "normal") draft.clear(`${S.sid}.week`); else draft.set(`${S.sid}.week`, { week: S.game.week, tdate: S.game.tdate, until });
+  };
   const currentSession = () => {
     const G = S.game, auto = G.focus === "auto" ? autoFocus() : null;
     const focus = G.focus === "auto" ? auto?.key : G.focus;
     const pin = G.pin && GAMES.find(x => x.id === G.pin && x.place === G.place);
-    const built = buildSession({ place: G.place, minutes: G.minutes - (pin ? pin.min : 0), level: levelOf(S.profile?.handicap), focus, seed: G.seed, exclude: pin ? [pin.id] : [] });
+    const built = buildSession({ place: G.place, minutes: G.minutes - (pin ? pin.min : 0), level: levelOf(S.profile?.handicap), focus, seed: G.seed, exclude: pin ? [pin.id] : [],
+      week: G.week, daysOut: daysOut(), extra: G.week === "swing" ? drillGames(of("drill")) : [] });
     const games = pin ? [pin, ...(G.place === "course" ? [] : built.filter(x => x.min <= G.minutes - pin.min))].slice(0, 3) : built;
     return { games, focus, why: pin ? "Picked from your round review." : auto?.why || "" };
   };
@@ -189,13 +198,17 @@ export function start(root, { students, onSignOut }) {
     const pick = (attr, list, cur) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn" ${attr}="${esc(v)}" aria-pressed="${String(cur) === String(v)}">${esc(l)}</button>`).join("")}</div>`;
     return top("Practice games", S.profile?.name || "") + `<main class="s-content">
       <section class="card">
+        <fieldset class="field"><legend>This week I'm…</legend>${pick("data-gweek", WEEKS, G.week)}
+          ${G.week === "tournament" ? `<div class="lv-row"><label>Tournament day <input type="date" id="g-tdate" class="lv-num" style="width:auto" value="${esc(G.tdate)}"></label>${daysOut() != null && daysOut() >= 0 ? `<span class="pill n">${daysOut() === 0 ? "Today!" : daysOut() + " day" + (daysOut() > 1 ? "s" : "") + " to go"}</span>` : ""}</div>` : ""}</fieldset>
+        ${WEEK_TIPS[G.week](daysOut()) ? `<p class="week-tip">${esc(WEEK_TIPS[G.week](daysOut()))}</p>` : ""}
         <fieldset class="field"><legend>Where are you practicing?</legend>${pick("data-gplace", PLACES, G.place)}</fieldset>
         <fieldset class="field"><legend>How much time do you have?</legend>${pick("data-gmin", (G.place === "course" ? [60, 90, 120] : [15, 30, 45, 60]).map(m => [m, m + " min"]), G.minutes)}</fieldset>
-        <fieldset class="field"><legend>What do you want to work on?</legend>${pick("data-gfocus", FOCUS, G.focus)}</fieldset>
+        ${G.week === "normal" ? `<fieldset class="field"><legend>What do you want to work on?</legend>${pick("data-gfocus", FOCUS, G.focus)}</fieldset>` : ""}
       </section>
       ${games.length ? `
       <section class="card session-head"><h2>Your session <span>${total} min · ${games.length} game${games.length > 1 ? "s" : ""}</span></h2>
-        ${why ? `<p class="why">${esc(why)}</p>` : ""}
+        ${why && G.week === "normal" ? `<p class="why">${esc(why)}</p>` : ""}
+        ${G.week === "swing" && games.some(g => g.drill) ? `<p class="why">Starts with your drill from Karina.</p>` : ""}
         ${ai?.intro ? `<p class="ai-intro"><b>Tailored for you:</b> ${esc(ai.intro)}</p>` : ""}
         <p class="muted">Warm up first: 5 minutes of easy swings or short putts before the first game.</p></section>
       ${games.map((g, i) => { const t = tipFor(g.id); return `<section class="card game">
@@ -550,7 +563,7 @@ export function start(root, { students, onSignOut }) {
     const { games } = currentSession();
     draft.set(`${S.sid}.p-worked`, games.map(g => `${g.name}: score ___ (${g.score.replace(/\.$/, "")})`).join("\n"));
     draft.set(`${S.sid}.p-min`, String(games.reduce((a, g) => a + g.min, 0)));
-    S.sess = { areas: [...new Set(games.map(g => g.area).filter(a => AREA_NAMES.includes(a)))], rating: 0, games: games.map(g => g.id) };
+    S.sess = { areas: [...new Set(games.map(g => g.area).filter(a => AREA_NAMES.includes(a)))], rating: 0, games: games.map(g => g.id), week: S.game.week };
     S.screen = "plan"; S.practiceOpen = true; S.sheet = null; render();
     const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
   }
@@ -564,7 +577,7 @@ export function start(root, { students, onSignOut }) {
       const recent = sessions().slice(0, 3).map(x => [x.worked, x.went, x.next].filter(Boolean).join(" / ")).filter(Boolean);
       const drills = of("drill").filter(d => d.status !== "Mastered").map(d => d.name);
       const res = await api.tailorSession({
-        place: S.game.place, minutes: S.game.minutes, focus,
+        place: S.game.place, minutes: S.game.minutes, focus, week: S.game.week, days_to_tournament: S.game.week === "tournament" ? daysOut() : null,
         games: games.map(x => ({ id: x.id, name: x.name, setup: x.setup, score: x.score, target: x.pass[levelOf(S.profile?.handicap)] })),
         player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent }
       });
@@ -601,6 +614,7 @@ export function start(root, { students, onSignOut }) {
     if (ls && S.liveSetup) { S.liveSetup.course = root.querySelector("#lv-course")?.value || ""; S.liveSetup.date = root.querySelector("#lv-date")?.value || today(); S.liveSetup.event = root.querySelector("#lv-event")?.value || "Casual";
       if (ls.dataset.lsholes) S.liveSetup.holes = ls.dataset.lsholes; else S.liveSetup.mode = ls.dataset.lsmode; render(); return; }
     const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; S.game.pin = null; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
+    const gw = t.closest("[data-gweek]"); if (gw) { S.game.week = gw.dataset.gweek; S.game.seed = 0; S.game.pin = null; S.game.ai = null; saveWeek(); render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
     const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }
     const dl = t.closest("[data-drill]"); if (dl) { S.sheet = { kind: "drill", id: dl.dataset.drill }; render(); return; }
@@ -705,7 +719,7 @@ export function start(root, { students, onSignOut }) {
     if (e.target.id === "liveForm") { await liveSave(); return; }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();
-      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
+      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), ...(S.sess.week && S.sess.week !== "normal" ? { week: S.sess.week } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
       if (!d.worked && !d.went && !d.areas.length && d.minutes === "") { toast("Add what you practiced first."); return; }
       const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved. Karina will see it.");
       if (ok) { clearDrafts("practiceForm"); S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
@@ -737,6 +751,7 @@ export function start(root, { students, onSignOut }) {
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
     if (e.target.dataset?.lvin && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvin, e.target.value.replace(/[^0-9]/g, "")); saveLive(); }
     if (id === "lv-notes" && S.live) { S.live.notes = e.target.value; saveLive(); }
+    if (id === "g-tdate") { S.game.tdate = e.target.value; S.game.seed = 0; saveWeek(); render(); }
     if (id && e.target.matches(DRAFTABLE)) draft.set(`${S.sid}.${id}`, e.target.value);
     if (id === "calc") {
       const v = +e.target.value;

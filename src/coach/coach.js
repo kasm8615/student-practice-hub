@@ -375,8 +375,8 @@ export function start(root, { onSignOut }) {
       ${last30.length ? `<div class="box" style="display:flex;flex-direction:column;gap:8px"><h4 style="margin:0">Focus, last 30 days</h4>${focusBar(last30.flatMap(x => (x.areas || []).map(a => ({ a, m: (+x.minutes || 0) / (x.areas.length || 1) }))).map(o => ({ ...o, m: Math.round(o.m) })), o => o.m, o => o.a)}</div>` : ""}
       ${r.length ? `<div class="entries">${r.map(e => { const dp = dateParts(e.date); return `<div class="entry">
         <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
-        <div><div class="t">${(e.areas || []).map(areaChip).join(" ") || "Practice"}</div>
-          ${e.games?.length ? `<div class="body"><b>Practice games:</b> ${e.games.map(id => esc(GAMES.find(g => g.id === id)?.name || id)).join(", ")}</div>` : ""}
+        <div><div class="t">${(e.areas || []).map(areaChip).join(" ") || "Practice"}${e.week ? ` <span class="pill neutral">${esc({ tournament: "Tournament week", swing: "Swing change", fun: "With friends" }[e.week] || e.week)}</span>` : ""}</div>
+          ${e.games?.length ? `<div class="body"><b>Practice games:</b> ${e.games.map(id => esc(GAMES.find(g => g.id === id)?.name || (id.startsWith("drill-") ? (of("drill").find(d => "drill-" + d.id === id)?.name || "Your drill") : id))).join(", ")}</div>` : ""}
           ${e.worked ? `<div class="body" style="white-space:pre-wrap"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}${e.went ? `<div class="body"><b>How it went:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>Next time:</b> ${esc(e.next)}</div>` : ""}</div>
         <div style="text-align:right">${e.minutes ? `<div class="hcp" style="font-size:18px">${esc(e.minutes)} min</div>` : ""}${e.rating ? `<span class="pill ${+e.rating >= 4 ? "good" : +e.rating === 3 ? "warn" : "bad"}">${RATINGS[+e.rating - 1]}</span>` : ""}</div></div>`; }).join("")}</div>`
         : `<div class="empty">No practice logged yet. ${first} logs sessions from the Plan screen or Home.</div>`}`;

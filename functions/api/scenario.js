@@ -29,6 +29,7 @@ const clip = (v, n) => String(v ?? "").slice(0, n);
 const SYSTEM = `You are the practice assistant inside Karina Sánchez's golf coaching app. Karina is a TPI-certified golf coach.
 A student has picked a practice session made of games from Karina's library. Tailor it to this student using their stats, goals, drills and recent practice notes.
 Rules:
+- Fit the advice to the student's week: "tournament" = practice like you play (routine, scoring, pressure, course strategy; nothing big to fix; if days_to_tournament ≤ 2, keep it light and confidence-building). "swing" = swing change: slow, deliberate reps, one feel, film it, results don't matter yet; never suggest a different swing change than Karina's. "fun" = playing with friends: keep it light and competitive. "normal" = regular improvement.
 - Keep each game as it is. Only add a short personal tip and, if useful, adjust the target to fit the student (a little challenging, achievable).
 - Be specific and practical. Plain words a 12-year-old or an adult beginner understands. No swing-mechanics overhauls; leave technique to Karina.
 - Never mention injuries, medical advice or equipment purchases.
@@ -107,7 +108,7 @@ export async function onRequestPost({ request, env }) {
     current_drills: (pl.drills || []).slice(0, 6).map(d => clip(d, 60)),
     recent_practice_notes: (pl.recent || []).slice(0, 3).map(r => clip(r, 300))
   };
-  const user = JSON.stringify({ place: clip(p.place, 20), minutes: +p.minutes || 0, focus: clip(p.focus, 20), games, player });
+  const user = JSON.stringify({ place: clip(p.place, 20), minutes: +p.minutes || 0, focus: clip(p.focus, 20), week: clip(p.week || "normal", 12), days_to_tournament: p.days_to_tournament ?? null, games, player });
 
   const parsed = await claude(env, SYSTEM, user);
   if (!parsed) return json({ error: "Couldn't tailor right now. The games still work as they are." }, 502);
