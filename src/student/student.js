@@ -2,7 +2,7 @@ import "./student.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
-import { benchmarkTable, myAverages, biggestGap } from "../lib/benchmarks.js";
+import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
 import { PLACES, GAMES, levelOf, buildSession, focusFor } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
@@ -24,7 +24,7 @@ export function start(root, { students, onSignOut }) {
     students, sid: null, profile: null, entries: [], scores: [],
     screen: "home", sheet: null, logOpen: false, loading: true,
     practiceOpen: false, sess: { areas: [], rating: 0 }, goalDraft: {}, calc: null,
-    game: { place: "range", minutes: 30, focus: "auto", seed: 0, ai: null, aiBusy: false }, aiAvailable: null
+    game: { place: "range", minutes: 30, focus: "auto", seed: 0, ai: null, aiBusy: false, pin: null }, aiAvailable: null, reviews: {}
   };
   try { const saved = localStorage.getItem("sph.student"); if (students.some(s => s.id === saved)) S.sid = saved; } catch {}
   if (!S.sid) S.sid = students[0].id;
@@ -75,7 +75,10 @@ export function start(root, { students, onSignOut }) {
   const currentSession = () => {
     const G = S.game, auto = G.focus === "auto" ? autoFocus() : null;
     const focus = G.focus === "auto" ? auto?.key : G.focus;
-    return { games: buildSession({ place: G.place, minutes: G.minutes, level: levelOf(S.profile?.handicap), focus, seed: G.seed }), focus, why: auto?.why || "" };
+    const pin = G.pin && GAMES.find(x => x.id === G.pin && x.place === G.place);
+    const built = buildSession({ place: G.place, minutes: G.minutes - (pin ? pin.min : 0), level: levelOf(S.profile?.handicap), focus, seed: G.seed, exclude: pin ? [pin.id] : [] });
+    const games = pin ? [pin, ...(G.place === "course" ? [] : built.filter(x => x.min <= G.minutes - pin.min))].slice(0, 3) : built;
+    return { games, focus, why: pin ? "Picked from your round review." : auto?.why || "" };
   };
   const firstName = () => String(S.profile?.name || "").split(/\s+/)[0];
 
@@ -208,6 +211,41 @@ export function start(root, { students, onSignOut }) {
       <p class="muted" style="text-align:center">Targets are set for your level. Write your scores in the practice log so Karina can see them.</p>
     </main>`;
   }
+  // AI review of one round: saved on the round so Karina sees it too.
+  function reviewHtml(r) {
+    const rv = r.review || (S.reviews[r.id] && S.reviews[r.id].review);
+    const busy = S.reviews[r.id]?.busy;
+    if (busy) return `<div class="review"><p class="muted">Reviewing your round…</p></div>`;
+    if (!rv) return S.aiAvailable ? `<button class="btn primary" data-act="review-round">✨ Review this round</button>` : "";
+    const g = GAMES.find(x => x.id === rv.game_id);
+    const list = (t, a) => a?.length ? `<h3 class="sh3">${t}</h3><ul>${a.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+    return `<div class="review"><b class="rv-head">${esc(rv.headline || "Round review")}</b>
+      ${list("What went well", rv.good)}${list("Where the strokes went", rv.cost)}
+      ${rv.focus ? `<h3 class="sh3">Work on this next</h3><p>${esc(rv.focus)}</p>` : ""}
+      ${rv.mental ? `<h3 class="sh3">Mental note</h3><p>${esc(rv.mental)}</p>` : ""}
+      ${g ? `<button class="btn primary" data-act="review-game" data-game="${esc(g.id)}">Practice it: ${esc(g.name)}</button>` : ""}
+      <small class="rv-foot">AI review based on your stats and notes. Karina sees it too.</small></div>`;
+  }
+  async function reviewRound(id) {
+    const r = S.entries.find(e => e.id === id);
+    if (!r) return;
+    S.reviews[id] = { busy: true }; render();
+    try {
+      const g = goal() || {};
+      const prev = byDateDesc(of("stat")).filter(x => x.id !== id && String(x.holes || "18") === String(r.holes || "18")).slice(0, 5)
+        .map(x => ({ date: x.date, score: x.score, putts: x.putts, fairways: x.fairways, gir: x.gir, updown: x.updown }));
+      const strip = ({ id: _i, type, student_id, author, created_by, created_at, updated_at, review, ...rest }) => rest;
+      const res = await api.reviewRound({
+        round: strip(r), previous: prev, target: targetScore(),
+        benchmark: String(r.holes || "18") === "18" ? benchmark(targetScore()) : null,
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name) },
+        games: GAMES.map(x => ({ id: x.id, name: x.name, place: x.place, helps: x.helps }))
+      });
+      S.reviews[id] = { review: res };
+      if (r.author === "student") { try { await api.updateEntry(r, { review: res }); await load(); } catch {} }
+    } catch (err) { S.reviews[id] = null; toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't review right now. Try again later."); }
+    render();
+  }
   const sessionKey = games => games.map(g => g.id).join(",") + "|" + S.game.minutes;
 
   function goalsScreen() {
@@ -255,8 +293,9 @@ export function start(root, { students, onSignOut }) {
       <div class="field"><label for="r-holes">Holes</label><select id="r-holes"><option>18</option><option>9</option></select></div></div>
       <div class="row2"><div class="field"><label for="r-score">Score *</label><input id="r-score" inputmode="numeric"></div><div class="field"><label for="r-putts">Putts</label><input id="r-putts" inputmode="numeric"></div></div>
       <div class="row2"><div class="field"><label for="r-fw">Fairways (e.g. 8/14)</label><input id="r-fw"></div><div class="field"><label for="r-gir">Greens in regulation</label><input id="r-gir" inputmode="numeric"></div></div>
-      <div class="row2"><div class="field"><label for="r-ud">Up & downs (e.g. 3/7)</label><input id="r-ud"></div><div></div></div>
-      <div class="field"><label for="r-notes">Note for Karina</label><textarea id="r-notes" placeholder="What went well, what didn't"></textarea></div>
+      <div class="row2"><div class="field"><label for="r-ud">Up & downs (e.g. 3/7)</label><input id="r-ud"></div><div class="field"><label for="r-pen">Penalty strokes</label><input id="r-pen" inputmode="numeric"></div></div>
+      <div class="row2"><div class="field"><label for="r-3p">3-putts</label><input id="r-3p" inputmode="numeric"></div><div class="field"><label for="r-dbl">Double bogeys or worse</label><input id="r-dbl" inputmode="numeric"></div></div>
+      <div class="field"><label for="r-notes">How did it go?</label><textarea id="r-notes" placeholder="e.g. Drove it well on the front, lost 3 balls right on the back. Felt rushed after the bad hole on 12."></textarea></div>
       <div class="row2"><button type="button" class="btn" data-act="cancel-log">Cancel</button><button type="submit" class="btn primary">Save round</button></div></form>`;
   }
   function lessonsScreen() {
@@ -302,7 +341,9 @@ export function start(root, { students, onSignOut }) {
       return wrap("Round", `<h2>${esc(r.score)} at ${esc(r.course || "the course")}</h2>
         <p>${esc(fmtDate(r.date))} · ${esc(r.event || "")} · ${esc(r.holes || "18")} holes</p>
         <div class="stats"><div><b>${esc(r.putts ?? "–") || "–"}</b><small>Putts</small></div><div><b>${esc(r.fairways || "–")}</b><small>Fairways</small></div><div><b>${esc(r.gir ?? "–") || "–"}</b><small>Greens</small></div></div>
+        ${[["Up & downs", r.updown], ["Penalties", r.penalties], ["3-putts", r.threeputts], ["Doubles+", r.doubles]].filter(([, v]) => v !== "" && v != null).map(([k, v]) => `<span class="mini-stat">${k}: <b>${esc(v)}</b></span>`).join("") ? `<div class="mini-stats">${[["Up & downs", r.updown], ["Penalties", r.penalties], ["3-putts", r.threeputts], ["Doubles+", r.doubles]].filter(([, v]) => v !== "" && v != null).map(([k, v]) => `<span class="mini-stat">${k}: <b>${esc(v)}</b></span>`).join("")}</div>` : ""}
         ${r.notes ? `<p>${esc(r.notes)}</p>` : ""}
+        ${reviewHtml(r)}
         ${r.author === "student" ? `<button class="btn danger" data-act="del-round">Delete round</button>` : ""}<button class="btn" data-close="1">Close</button>`);
     }
     if (sh.kind === "session") {
@@ -428,9 +469,9 @@ export function start(root, { students, onSignOut }) {
     const ar = t.closest("[data-area]");
     if (ar) { const n = ar.dataset.area, A = S.sess.areas; S.sess.areas = A.includes(n) ? A.filter(x => x !== n) : A.concat(n); render(); return; }
     const rt = t.closest("[data-rate]"); if (rt) { const v = +rt.dataset.rate; S.sess.rating = S.sess.rating === v ? 0 : v; render(); return; }
-    const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
+    const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; S.game.pin = null; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
-    const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; render(); return; }
+    const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }
     const dl = t.closest("[data-drill]"); if (dl) { S.sheet = { kind: "drill", id: dl.dataset.drill }; render(); return; }
     const sw = t.closest("[data-switch]"); if (sw) { select(sw.dataset.switch); return; }
     const stp = t.closest("[data-step]");
@@ -446,9 +487,15 @@ export function start(root, { students, onSignOut }) {
     if (act === "log") { S.screen = "rounds"; S.logOpen = true; S.sheet = null; render(); window.scrollTo(0, 0); return; }
     if (act === "cancel-log") { S.logOpen = false; render(); return; }
     if (act === "practice") { openPractice(); return; }
-    if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; render(); window.scrollTo(0, 0); return; }
+    if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; S.game.pin = null; render(); window.scrollTo(0, 0); return; }
     if (act === "game-log") { logGames(); return; }
     if (act === "game-ai") { tailor(); return; }
+    if (act === "review-round") { reviewRound(S.sheet.id); return; }
+    if (act === "review-game") {
+      const g = GAMES.find(x => x.id === a.dataset.game);
+      if (g) { S.game = { ...S.game, place: g.place, minutes: g.place === "course" ? 90 : Math.max(30, g.min), pin: g.id, seed: 0, ai: null }; go("games"); }
+      return;
+    }
     if (act === "cancel-practice") { S.practiceOpen = false; render(); return; }
     if (act === "to-score") { openScore(S.sheet.id); return; }
     if (act === "score-drill") { const id = S.sheet.id; S.sheet = { kind: "score", id, drill: id, val: 0 }; openScore(id, id); return; }
@@ -493,9 +540,14 @@ export function start(root, { students, onSignOut }) {
       const f = k => root.querySelector("#r-" + k).value.trim();
       const num = v => v === "" || isNaN(+v) ? "" : +v;
       if (f("score") === "" || isNaN(+f("score"))) { toast("Add your score to save the round."); root.querySelector("#r-score").focus(); return; }
-      const d = { date: f("date") || today(), event: f("event"), course: f("course"), holes: f("holes"), score: +f("score"), putts: num(f("putts")), fairways: f("fw"), gir: num(f("gir")), updown: f("ud"), notes: f("notes") };
-      const ok = await run(() => api.addEntry(S.sid, "stat", d), "Round saved");
-      if (ok) { clearDrafts("roundForm"); S.logOpen = false; render(); }
+      const d = { date: f("date") || today(), event: f("event"), course: f("course"), holes: f("holes"), score: +f("score"), putts: num(f("putts")), fairways: f("fw"), gir: num(f("gir")), updown: f("ud"), penalties: num(f("pen")), threeputts: num(f("3p")), doubles: num(f("dbl")), notes: f("notes") };
+      let saved = null;
+      const ok = await run(async () => { saved = await api.addEntry(S.sid, "stat", d); }, "Round saved");
+      if (ok) {
+        clearDrafts("roundForm"); S.logOpen = false;
+        if (saved && S.aiAvailable) { S.sheet = { kind: "round", id: saved.id }; render(); reviewRound(saved.id); }
+        else render();
+      }
     }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();

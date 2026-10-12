@@ -168,3 +168,12 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .gscore div:last-child span{font-weight:700;color:var(--pine);font-size:15px}
 .game .twist{font-size:13px;color:var(--ink-3)}
 .btn:disabled{opacity:.6}
+/* round review */
+.mini-stats{display:flex;flex-wrap:wrap;gap:6px}
+.mini-stat{font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--ink-2)}
+.review{background:var(--pine-soft);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.review .rv-head{font-size:16px;line-height:1.3}
+.review ul{margin:0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:3px}
+.review p{font-size:14px}
+.review .sh3{margin-top:6px}
+.rv-foot{font-size:11px;color:var(--ink-3)}

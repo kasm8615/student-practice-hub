@@ -70,6 +70,7 @@ export const api = {
     if (!res.ok) return false;
     return !!(await res.json().catch(() => ({}))).ai;
   },
+  async reviewRound(payload) { return this.tailorSession({ kind: "review", ...payload }); },
   async tailorSession(payload) {
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     const res = await fetch("/api/scenario", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(payload) });

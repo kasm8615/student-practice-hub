@@ -316,8 +316,9 @@ export function start(root, { onSignOut }) {
         <div class="kpi"><div class="l">Rounds</div><div class="v">${r.length}</div></div></div>
         <div class="box">${chart(r)}</div>
         <div class="scroll"><table class="card"><thead><tr><th>Date</th><th>Course</th><th>Type</th><th class="n">Holes</th><th class="n">Score</th><th class="n">FW</th><th class="n">GIR</th><th class="n">Putts</th><th class="n">U&amp;D</th><th class="n">Pen</th></tr></thead>
-        <tbody>${r.map(e => `<tr class="row" data-edit="${esc(e.id)}" tabindex="0"><td>${esc(fmtDate(e.date))}${e.author === "student" ? " ·&nbsp;S" : ""}</td><td>${esc(e.course)}</td><td>${esc(e.event)}</td><td class="n">${esc(e.holes || "18")}</td><td class="n"><b>${esc(e.score)}</b></td><td class="n">${esc(e.fairways)}</td><td class="n">${esc(e.gir)}</td><td class="n">${esc(e.putts)}</td><td class="n">${esc(e.updown)}</td><td class="n">${esc(e.penalties)}</td></tr>`).join("")}</tbody></table></div>
-        <p style="font-size:12px;color:var(--ink-3);margin:0">S = logged by the student.</p>` : empty(t));
+        <tbody>${r.map(e => `<tr class="row" data-edit="${esc(e.id)}" tabindex="0"><td>${esc(fmtDate(e.date))}${e.author === "student" ? " ·&nbsp;S" : ""}${e.review ? " ✨" : ""}</td><td>${esc(e.course)}</td><td>${esc(e.event)}</td><td class="n">${esc(e.holes || "18")}</td><td class="n"><b>${esc(e.score)}</b></td><td class="n">${esc(e.fairways)}</td><td class="n">${esc(e.gir)}</td><td class="n">${esc(e.putts)}</td><td class="n">${esc(e.updown)}</td><td class="n">${esc(e.penalties)}</td></tr>`).join("")}</tbody></table></div>
+        <p style="font-size:12px;color:var(--ink-3);margin:0">S = logged by the student. ✨ = has an AI round review.</p>
+        ${r.filter(e => e.review).slice(0, 3).map(e => `<div class="box rv-box" data-edit="${esc(e.id)}" role="button" tabindex="0"><h4>✨ ${esc(fmtDate(e.date))} · ${esc(e.score)}${e.course ? " at " + esc(e.course) : ""}</h4>${reviewBody(e.review)}</div>`).join("")}` : empty(t));
     }
     if (t === "plan") {
       const planned = rows.reduce((a, p) => a + (+p.minutes || 0), 0), done = rows.filter(p => p.done).reduce((a, p) => a + (+p.minutes || 0), 0);
@@ -378,6 +379,16 @@ export function start(root, { onSignOut }) {
           ${e.worked ? `<div class="body" style="white-space:pre-wrap"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}${e.went ? `<div class="body"><b>How it went:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>Next time:</b> ${esc(e.next)}</div>` : ""}</div>
         <div style="text-align:right">${e.minutes ? `<div class="hcp" style="font-size:18px">${esc(e.minutes)} min</div>` : ""}${e.rating ? `<span class="pill ${+e.rating >= 4 ? "good" : +e.rating === 3 ? "warn" : "bad"}">${RATINGS[+e.rating - 1]}</span>` : ""}</div></div>`; }).join("")}</div>`
         : `<div class="empty">No practice logged yet. ${first} logs sessions from the Plan screen or Home.</div>`}`;
+  }
+
+  function reviewBody(rv) {
+    const g = GAMES.find(x => x.id === rv.game_id);
+    const li = a => (a || []).map(x => `<li>${esc(x)}</li>`).join("");
+    return `<p><b>${esc(rv.headline)}</b></p>
+      ${rv.good?.length ? `<p style="margin-top:6px"><b>Went well</b></p><ul>${li(rv.good)}</ul>` : ""}
+      ${rv.cost?.length ? `<p style="margin-top:6px"><b>Strokes lost</b></p><ul>${li(rv.cost)}</ul>` : ""}
+      ${rv.focus ? `<p style="margin-top:6px"><b>Focus:</b> ${esc(rv.focus)}${g ? ` <span class="pill neutral">Game: ${esc(g.name)}</span>` : ""}</p>` : ""}
+      ${rv.mental ? `<p style="margin-top:4px"><b>Mental:</b> ${esc(rv.mental)}</p>` : ""}`;
   }
 
   function notesPanel(s) {
@@ -488,6 +499,7 @@ export function start(root, { onSignOut }) {
         if (type === "plan" && d.drill && !d.area) { const dr = of("drill").find(x => x.id === d.drill); if (dr) d.area = dr.category; }
         return !!(e ? await write(api.updateEntry(e, d), "Saved") : await write(api.addEntry(S.sel, type, d), T.one + " added"));
       },
+      extra: e && e.review ? `<div class="box rv-box"><h4>✨ AI round review (what the student saw)</h4>${reviewBody(e.review)}</div>` : "",
       onDelete: e ? () => write(api.deleteEntry(e.id), "Deleted") : null
     });
   }

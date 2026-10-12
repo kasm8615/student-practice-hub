@@ -184,3 +184,6 @@ a{color:var(--pine)}
   .m-bar b{flex:1;font-family:var(--display);font-size:20px;line-height:1.1}
   .m-bar .c-logo{width:34px;height:34px;flex:none}
 }
+.rv-box{background:var(--pine-soft);font-size:14px}
+.rv-box h4{margin:0 0 6px}
+.rv-box ul{margin:2px 0 0;padding-left:18px}

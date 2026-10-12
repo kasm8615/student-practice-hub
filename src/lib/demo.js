@@ -82,6 +82,10 @@ export const demoApi = {
   async videoStart() { throw new Error("Video uploads don't work in the preview."); },
   async videoStatus() { return { status: "errored" }; },
   async tailorAvailable() { return true; },
+  async reviewRound(p) {
+    await new Promise(r => setTimeout(r, 400));
+    return { headline: `Solid ${p.round.score} with good driving; the short game cost you most.`, good: ["8 of 14 fairways, your best this month", "Only one penalty"], cost: ["3 three-putts ≈ 3 strokes", "Missed 4 of 5 up-and-downs from just off the green"], focus: "Chipping to a landing spot so your first putt is shorter.", game_id: "towel", mental: "You said you rushed after 12: take 3 breaths before the next tee.", at: new Date().toISOString() };
+  },
   async tailorSession(p) {
     await new Promise(r => setTimeout(r, 400));
     return { intro: "Your putting is close to target, but you're averaging 5 greens. Today is about solid contact into greens, then distance control.", games: p.games.map((g, i) => ({ id: g.id, target: i === 0 ? "8 / 18" : g.target, tip: i === 0 ? "Use your chair drill feel on the first 3 holes before you start counting." : "Write down the club you used for each miss." })) };
