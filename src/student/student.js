@@ -3,6 +3,7 @@ import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
+import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, levelOf, buildSession, focusFor } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
@@ -40,7 +41,7 @@ export function start(root, { students, onSignOut }) {
     } catch (err) { S.loading = false; render(); toast(friendly(err)); }
   }
   function select(id) {
-    S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false;
+    S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false; S.live = draft.get(`${id}.live`); S.liveSetup = null;
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
     stopWatch = api.watch([id], () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 400); });
@@ -211,6 +212,16 @@ export function start(root, { students, onSignOut }) {
       <p class="muted" style="text-align:center">Targets are set for your level. Write your scores in the practice log so Karina can see them.</p>
     </main>`;
   }
+  function cardTable(card) {
+    const app = h => (h.app?.res || []).map(x => ({ G: "✓", S: "S", Lg: "Lg", L: "L", R: "R" }[x])).join("");
+    const tee = h => h.par < 4 ? "" : { fw: "✓", L: "L", R: "R" }[h.tee?.res] || "";
+    return `<div class="scroll"><table class="sc-card"><thead><tr><th>Hole</th>${card.map(h => `<th>${h.n}</th>`).join("")}</tr></thead><tbody>
+      <tr><td>Par</td>${card.map(h => `<td>${h.par}</td>`).join("")}</tr>
+      <tr class="sc-score"><td>Score</td>${card.map(h => `<td class="${h.score - h.par < 0 ? "u" : h.score - h.par >= 2 ? "o2" : h.score - h.par === 1 ? "o" : ""}">${h.score}</td>`).join("")}</tr>
+      <tr><td>Tee</td>${card.map(h => `<td>${tee(h)}</td>`).join("")}</tr>
+      ${card.some(h => (h.app?.res || []).length) ? `<tr><td>Green</td>${card.map(h => `<td>${app(h)}</td>`).join("")}</tr>` : ""}
+      <tr><td>Putts</td>${card.map(h => `<td>${h.putts ?? ""}</td>`).join("")}</tr></tbody></table></div>`;
+  }
   // AI review of one round: saved on the round so Karina sees it too.
   function reviewHtml(r) {
     const rv = r.review || (S.reviews[r.id] && S.reviews[r.id].review);
@@ -236,7 +247,9 @@ export function start(root, { students, onSignOut }) {
         .map(x => ({ date: x.date, score: x.score, putts: x.putts, fairways: x.fairways, gir: x.gir, updown: x.updown }));
       const strip = ({ id: _i, type, student_id, author, created_by, created_at, updated_at, review, ...rest }) => rest;
       const res = await api.reviewRound({
-        round: strip(r), previous: prev, target: targetScore(),
+        round: { ...strip(r), card: undefined, patterns: undefined }, patterns: r.patterns || null,
+        holes: Array.isArray(r.card) ? r.card.map(h => ({ n: h.n, par: h.par, score: h.score, putts: h.putts, first_putt_ft: h.fp, penalties: h.pen, penalty_from: h.penFrom, recovery: h.rec, tee: h.par >= 4 ? h.tee : undefined, approach: h.app, around_green: (h.app?.res || []).length && !h.app.res.includes("G") ? h.sg : undefined })) : null,
+        previous: prev, target: targetScore(),
         benchmark: String(r.holes || "18") === "18" ? benchmark(targetScore()) : null,
         player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name) },
         games: GAMES.map(x => ({ id: x.id, name: x.name, place: x.place, helps: x.helps }))
@@ -280,11 +293,123 @@ export function start(root, { students, onSignOut }) {
     const avg = k => { const v = e18.filter(x => x[k] !== "" && x[k] != null && !isNaN(+x[k])).map(x => +x[k]); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : "–"; };
     return top("My rounds", S.profile?.name || "") + `<main class="s-content">
       <div class="stats"><div><b>${avg("score")}</b><small>Avg score (18)</small></div><div><b>${avg("putts")}</b><small>Avg putts</small></div><div><b>${avg("gir")}</b><small>Avg greens</small></div></div>
-      ${S.logOpen ? logForm() : `<button class="btn primary" data-act="log">+ Log a round</button>`}
+      ${S.live ? `<section class="card live-resume"><h2>Round in progress</h2><p style="margin:0"><b>${esc(S.live.course || "Your round")}</b> · ${S.live.mode === "full" ? "Full" : "Quick"} · ${liveThru()}</p>
+        <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
+      ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
       <section class="card"><h2>Recent rounds</h2>${r.map(x => { const d = dateParts(x.date); return `<button class="round" data-round="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
         <span><span style="font-weight:600;display:block">${esc(x.course || x.event || "Round")}</span><span class="meta">${esc(x.event || "")} · ${esc(x.holes || "18")} holes${x.putts !== "" && x.putts != null ? ` · ${esc(x.putts)} putts` : ""}${x.fairways ? ` · FW ${esc(x.fairways)}` : ""}</span></span>
         <span class="sc">${esc(x.score)}</span></button>`; }).join("") || `<p class="muted">No rounds yet. Log your next one after you play.</p>`}</section></main>`;
   }
+  // ---------- hole-by-hole round tracker
+  const liveKey = () => `${S.sid}.live`;
+  const saveLive = () => draft.set(liveKey(), S.live);
+  const liveThru = () => { const L = S.live; if (!L) return ""; const t = totals(L.card); return t.holes ? `${t.score - t.par >= 0 ? "+" : ""}${t.score - t.par} thru ${t.holes}` : "not started"; };
+  const parsFor = course => {
+    const k = String(course || "").trim().toLowerCase();
+    if (!k) return null;
+    try { const p = JSON.parse(localStorage.getItem("sph.pars." + k) || "null"); if (p) return p; } catch {}
+    const prev = byDateDesc(of("stat")).find(x => String(x.course || "").trim().toLowerCase() === k && Array.isArray(x.card));
+    return prev ? Object.fromEntries(prev.card.map(h => [h.n, h.par])) : null;
+  };
+  function liveSetupHtml() {
+    const st = S.liveSetup;
+    const courses = [...new Set(of("stat").map(x => x.course).filter(Boolean))];
+    const opt = (attr, list, cur) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn" data-${attr}="${esc(v)}" aria-pressed="${String(cur) === String(v)}">${esc(l)}</button>`).join("")}</div>`;
+    return top("New round", S.profile?.name || "") + `<main class="s-content"><section class="card">
+      <div class="field"><label for="lv-course">Course</label><input id="lv-course" list="lv-courses" autocomplete="off" value="${esc(st.course)}" placeholder="e.g. Renaissance Park"><datalist id="lv-courses">${courses.map(c => `<option value="${esc(c)}">`).join("")}</datalist></div>
+      <div class="row2"><div class="field"><label for="lv-date">Date</label><input id="lv-date" type="date" value="${esc(st.date)}"></div>
+        <div class="field"><label for="lv-event">Type</label><select id="lv-event">${["Casual", "Practice round", "Tournament"].map(o => `<option ${o === st.event ? "selected" : ""}>${o}</option>`).join("")}</select></div></div>
+      <fieldset class="field"><legend>Holes</legend>${opt("lsholes", [["18", "18 holes"], ["front", "Front 9"], ["back", "Back 9"]], st.holes)}</fieldset>
+      <fieldset class="field"><legend>How much do you want to track?</legend>${opt("lsmode", [["quick", "Quick"], ["full", "Full"]], st.mode)}
+        <p class="muted">${st.mode === "full" ? "Full: tee shot misses and start line, approach club, distance and miss, chips, first putt distance, penalties. About 20 seconds a hole." : "Quick: score, putts, fairway and penalties. About 5 seconds a hole."}</p></fieldset>
+      <button class="btn primary" data-act="live-start">Start on hole ${st.holes === "back" ? 10 : 1}</button></section></main>`;
+  }
+  function liveHtml() {
+    const L = S.live, h = L.card[L.cur], full = L.mode === "full";
+    const b = (path, val, label, on, cls = "") => `<button type="button" class="pick-btn ${cls}" data-lv="${path}" data-val="${esc(val)}" aria-pressed="${!!on}">${label}</button>`;
+    const sec = (title, inner) => `<div class="lv-sec"><h3 class="sh3">${title}</h3>${inner}</div>`;
+    const clubSel = (path, cur) => `<select class="lv-club" data-lvsel="${path}" aria-label="Club"><option value="">Club</option>${CLUBS.map(c => `<option ${c === cur ? "selected" : ""}>${c}</option>`).join("")}</select>`;
+    const missedGreen = (h.app.res || []).length && !h.app.res.includes("G");
+    const scores = [h.par - 1, h.par, h.par + 1, h.par + 2, h.par + 3];
+    const names = { [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Double", 3: "Triple" };
+    const t = totals(L.card);
+    return `<header class="lv-top"><button class="linkbtn" data-act="live-leave">‹ Rounds</button><span>${esc(L.course || "Round")} · ${t.holes ? `${t.score - t.par >= 0 ? "+" : ""}${t.score - t.par} thru ${t.holes}` : "Hole 1"}</span></header>
+      <main class="s-content lv">
+      <div class="lv-strip">${L.card.map((x, i) => `<button data-lvgo="${i}" class="${i === L.cur ? "cur" : ""} ${x.score != null ? "done" : ""}" aria-label="Hole ${x.n}">${x.n}${x.score != null ? `<small>${x.score}</small>` : ""}</button>`).join("")}</div>
+      <section class="card lv-card">
+        <div class="lv-head"><h2 class="lv-hole">Hole ${h.n}</h2><div class="pick">${[3, 4, 5].map(p => b("par", p, "Par " + p, h.par === p, "sm")).join("")}</div></div>
+        ${sec("Score", `<div class="pick lv-score">${scores.map(v => b("score", v, `<b>${v}</b><small>${names[v - h.par] || ""}</small>`, h.score === v)).join("")}${b("score", (h.score ?? h.par + 3) + 1, h.score > h.par + 3 ? `<b>${h.score}</b><small>+ more</small>` : "<b>+</b><small>more</small>", h.score > h.par + 3)}</div>`)}
+        ${h.par >= 4 ? sec("Tee shot", `<div class="pick">${b("tee.res", "fw", "Fairway", h.tee.res === "fw")}${b("tee.res", "L", "← Left", h.tee.res === "L")}${b("tee.res", "R", "Right →", h.tee.res === "R")}${full ? clubSel("tee.club", h.tee.club) : ""}</div>
+          ${full && (h.tee.res === "L" || h.tee.res === "R") ? `<div class="pick lv-start">${b("tee.start", "curve", "Started on target, curved away", h.tee.start === "curve")}${b("tee.start", "off", "Started off target, stayed there", h.tee.start === "off")}</div>` : ""}`) : ""}
+        ${full ? sec(h.par === 3 ? "Tee shot (into the green)" : "Shot into the green", `<div class="lv-row"><label>Distance <input class="lv-num" data-lvin="app.yds" inputmode="numeric" value="${esc(h.app.yds)}" placeholder="yds"></label>${clubSel("app.club", h.app.club)}</div>
+          <div class="pick">${b("app", "G", "On the green", h.app.res.includes("G"), "good")}${[["S", "Short"], ["Lg", "Long"], ["L", "Left"], ["R", "Right"]].map(([v, l]) => b("app", v, l, h.app.res.includes(v))).join("")}</div>
+          <p class="muted">Missed? Tap up to two, e.g. Short + Right.</p>`) : ""}
+        ${full && missedGreen ? sec("Around the green", `<div class="pick">${b("sg.kind", "chip", "Chip / pitch", h.sg.kind === "chip")}${b("sg.kind", "bunker", "Bunker", h.sg.kind === "bunker")}</div>
+          ${h.sg.kind === "chip" ? `<div class="pick">${b("sg.land", "on", "Hit my landing spot", h.sg.land === "on", "good")}${b("sg.land", "short", "Landed short", h.sg.land === "short")}${b("sg.land", "long", "Landed past it", h.sg.land === "long")}</div>`
+            : `<div class="pick">${b("sg.out", "yes", "Out in one", h.sg.out === true, "good")}${b("sg.out", "no", "Took more than one", h.sg.out === false)}</div>`}
+          <div class="lv-row"><span>Shots to get on the green</span><span class="stepper sm"><button type="button" data-lvstep="sg.shots" data-d="-1">−</button><output>${h.sg.shots}</output><button type="button" data-lvstep="sg.shots" data-d="1">+</button></span></div>`) : ""}
+        ${sec("Putts", `${full ? `<div class="lv-row"><label>First putt <input class="lv-num" data-lvin="fp" inputmode="numeric" value="${esc(h.fp)}" placeholder="ft"></label></div>` : ""}<div class="pick">${[0, 1, 2, 3, 4].map(v => b("putts", v, v, h.putts === v)).join("")}</div>`)}
+        ${sec("Penalties & trouble", `<div class="lv-row"><span>Penalty strokes</span><span class="stepper sm"><button type="button" data-lvstep="pen" data-d="-1">−</button><output>${h.pen}</output><button type="button" data-lvstep="pen" data-d="1">+</button></span></div>
+          ${full && h.pen > 0 ? `<div class="pick">${b("penFrom", "tee", "Off the tee", h.penFrom === "tee")}${b("penFrom", "app", "On the approach", h.penFrom === "app")}${b("penFrom", "other", "Other", h.penFrom === "other")}</div>` : ""}
+          ${full ? `<div class="pick">${b("rec", h.rec ? "" : "1", "Hit a punch-out / recovery shot", h.rec)}</div>` : ""}`)}
+      </section>
+      <div class="row2">${L.cur > 0 ? `<button class="btn" data-act="live-prev">‹ Hole ${L.card[L.cur - 1].n}</button>` : "<span></span>"}
+        ${L.cur < L.card.length - 1 ? `<button class="btn primary" data-act="live-next">Hole ${L.card[L.cur + 1].n} ›</button>` : `<button class="btn primary" data-act="live-finish">Finish round</button>`}</div>
+      ${L.cur < L.card.length - 1 && t.holes >= Math.min(9, L.card.length) ? `<button class="btn" data-act="live-finish">Finish round now (${t.holes} holes)</button>` : ""}
+      </main>`;
+  }
+  function liveFinishHtml() {
+    const L = S.live, t = totals(L.card), lines = patternLines(patterns(L.card));
+    return top("Round done", L.course || "") + `<main class="s-content">
+      <section class="card"><div class="stats"><div><b>${t.score}</b><small>${t.score - t.par >= 0 ? "+" : ""}${t.score - t.par} · ${t.holes} holes</small></div><div><b>${t.putts === "" ? "–" : t.putts}</b><small>Putts</small></div><div><b>${t.gir}</b><small>Greens</small></div></div>
+        <div class="mini-stats">${[["Fairways", t.fairways], ["Up & downs", t.updown], ["Penalties", t.penalties], ["3-putts", t.threeputts]].filter(([, v]) => v !== "").map(([k, v]) => `<span class="mini-stat">${k}: <b>${esc(v)}</b></span>`).join("")}</div></section>
+      ${lines.length ? `<section class="card"><h2>Your patterns</h2>${lines.map(([k, v]) => `<p class="pat"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</section>` : ""}
+      <form id="liveForm" class="card" novalidate><div class="field"><label for="lv-notes">How did it go?</label><textarea id="lv-notes" placeholder="e.g. Felt rushed after the bad hole on 12. Putting felt good.">${esc(L.notes || "")}</textarea></div>
+        <button class="btn primary" type="submit">Save round</button><button type="button" class="btn" data-act="live-back">Back to the holes</button></form></main>`;
+  }
+  function liveScreen() { return S.liveSetup ? liveSetupHtml() : !S.live ? roundsScreen() : S.live.finishing ? liveFinishHtml() : liveHtml(); }
+  function setPath(obj, path, val) { const k = path.split("."); let o = obj; k.slice(0, -1).forEach(x => { o = o[x]; }); o[k[k.length - 1]] = val; }
+  function getPath(obj, path) { return path.split(".").reduce((o, x) => o?.[x], obj); }
+  function liveTap(el) {
+    const L = S.live, h = L.card[L.cur];
+    if (el.dataset.lvgo != null) { L.cur = +el.dataset.lvgo; saveLive(); render(); window.scrollTo(0, 0); return; }
+    if (el.dataset.lvstep) {
+      const p = el.dataset.lvstep, min = p === "sg.shots" ? 1 : 0;
+      setPath(h, p, Math.max(min, Math.min(9, (+getPath(h, p) || 0) + +el.dataset.d)));
+    } else {
+      const p = el.dataset.lv, v = el.dataset.val;
+      if (p === "app") {
+        let r = h.app.res.filter(x => x !== "G");
+        if (v === "G") r = h.app.res.includes("G") ? [] : ["G"];
+        else if (r.includes(v)) r = r.filter(x => x !== v);
+        else { const opp = { S: "Lg", Lg: "S", L: "R", R: "L" }[v]; r = r.filter(x => x !== opp); r.push(v); r = r.slice(-2); }
+        h.app.res = r;
+      } else if (["par", "score", "putts"].includes(p)) {
+        const n = +v; setPath(h, p, getPath(h, p) === n && p !== "par" ? null : n);
+        if (p === "par") { L.pars = { ...(L.pars || {}), [h.n]: n }; }
+      } else if (p === "sg.out") h.sg.out = h.sg.out === (v === "yes") ? null : v === "yes";
+      else if (p === "rec") h.rec = !!v;
+      else setPath(h, p, getPath(h, p) === v ? "" : v);
+      if (p === "tee.res" && h.tee.res !== "L" && h.tee.res !== "R") h.tee.start = "";
+      if (p === "pen" && !h.pen) h.penFrom = "";
+    }
+    saveLive(); render();
+  }
+  async function liveSave() {
+    const L = S.live, t = totals(L.card);
+    if (!t.holes) { toast("Enter a score on at least one hole."); return; }
+    const card = L.card.filter(h => h.score != null);
+    const notes = root.querySelector("#lv-notes")?.value.trim() || "";
+    const d = { date: L.date || today(), event: L.event, course: L.course, holes: t.holes > 9 ? "18" : "9", holes_played: t.holes, score: t.score, putts: t.putts, fairways: t.fairways, gir: t.gir, updown: t.updown,
+      penalties: t.penalties, threeputts: t.threeputts, doubles: t.doubles, par: t.par, notes, mode: L.mode, card, patterns: patterns(card) };
+    try { if (L.course) localStorage.setItem("sph.pars." + L.course.trim().toLowerCase(), JSON.stringify(Object.fromEntries(L.card.map(h => [h.n, h.par])))); } catch {}
+    let saved = null;
+    const ok = await run(async () => { saved = await api.addEntry(S.sid, "stat", d); }, "Round saved");
+    if (!ok) return;
+    draft.clear(liveKey()); clearDrafts("liveForm"); S.live = null; S.screen = "rounds";
+    if (saved) { S.sheet = { kind: "round", id: saved.id }; render(); if (S.aiAvailable) reviewRound(saved.id); } else render();
+  }
+
   function logForm() {
     return `<form class="card" id="roundForm" novalidate><h2>Log a round</h2>
       <div class="row2"><div class="field"><label for="r-date">Date</label><input id="r-date" type="date" value="${today()}"></div>
@@ -321,7 +446,7 @@ export function start(root, { students, onSignOut }) {
   }
   function nav() {
     const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${(S.screen === "games" ? "plan" : S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", live: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -343,6 +468,8 @@ export function start(root, { students, onSignOut }) {
         <div class="stats"><div><b>${esc(r.putts ?? "–") || "–"}</b><small>Putts</small></div><div><b>${esc(r.fairways || "–")}</b><small>Fairways</small></div><div><b>${esc(r.gir ?? "–") || "–"}</b><small>Greens</small></div></div>
         ${[["Up & downs", r.updown], ["Penalties", r.penalties], ["3-putts", r.threeputts], ["Doubles+", r.doubles]].filter(([, v]) => v !== "" && v != null).map(([k, v]) => `<span class="mini-stat">${k}: <b>${esc(v)}</b></span>`).join("") ? `<div class="mini-stats">${[["Up & downs", r.updown], ["Penalties", r.penalties], ["3-putts", r.threeputts], ["Doubles+", r.doubles]].filter(([, v]) => v !== "" && v != null).map(([k, v]) => `<span class="mini-stat">${k}: <b>${esc(v)}</b></span>`).join("")}</div>` : ""}
         ${r.notes ? `<p>${esc(r.notes)}</p>` : ""}
+        ${r.patterns ? `<div class="pats"><h3 class="sh3">Your patterns</h3>${patternLines(r.patterns).map(([k, v]) => `<p class="pat"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</div>` : ""}
+        ${Array.isArray(r.card) ? cardTable(r.card) : ""}
         ${reviewHtml(r)}
         ${r.author === "student" ? `<button class="btn danger" data-act="del-round">Delete round</button>` : ""}<button class="btn" data-close="1">Close</button>`);
     }
@@ -398,7 +525,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, games: gamesScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, live: liveScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -469,6 +596,10 @@ export function start(root, { students, onSignOut }) {
     const ar = t.closest("[data-area]");
     if (ar) { const n = ar.dataset.area, A = S.sess.areas; S.sess.areas = A.includes(n) ? A.filter(x => x !== n) : A.concat(n); render(); return; }
     const rt = t.closest("[data-rate]"); if (rt) { const v = +rt.dataset.rate; S.sess.rating = S.sess.rating === v ? 0 : v; render(); return; }
+    const lv = t.closest("[data-lv],[data-lvstep],[data-lvgo]"); if (lv && S.live) { liveTap(lv); return; }
+    const ls = t.closest("[data-lsholes],[data-lsmode]");
+    if (ls && S.liveSetup) { S.liveSetup.course = root.querySelector("#lv-course")?.value || ""; S.liveSetup.date = root.querySelector("#lv-date")?.value || today(); S.liveSetup.event = root.querySelector("#lv-event")?.value || "Casual";
+      if (ls.dataset.lsholes) S.liveSetup.holes = ls.dataset.lsholes; else S.liveSetup.mode = ls.dataset.lsmode; render(); return; }
     const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; S.game.pin = null; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
     const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }
@@ -490,6 +621,27 @@ export function start(root, { students, onSignOut }) {
     if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; S.game.pin = null; render(); window.scrollTo(0, 0); return; }
     if (act === "game-log") { logGames(); return; }
     if (act === "game-ai") { tailor(); return; }
+    if (act === "live-new") { S.liveSetup = { course: "", date: today(), event: "Casual", holes: "18", mode: "quick" }; S.screen = "live"; S.sheet = null; render(); window.scrollTo(0, 0); return; }
+    if (act === "live-start") {
+      const st = S.liveSetup; st.course = root.querySelector("#lv-course").value.trim(); st.date = root.querySelector("#lv-date").value || today(); st.event = root.querySelector("#lv-event").value;
+      const nums = st.holes === "front" ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : st.holes === "back" ? [10, 11, 12, 13, 14, 15, 16, 17, 18] : Array.from({ length: 18 }, (_, i) => i + 1);
+      const pars = parsFor(st.course) || {};
+      S.live = { course: st.course, date: st.date, event: st.event, mode: st.mode, cur: 0, card: nums.map(n => newHole(n, +pars[n] || 4)) };
+      S.liveSetup = null; saveLive(); render(); window.scrollTo(0, 0); return;
+    }
+    if (act === "live-resume") { S.screen = "live"; render(); window.scrollTo(0, 0); return; }
+    if (act === "live-leave") { S.screen = "rounds"; render(); return; }
+    if (act === "live-discard") {
+      if (!a.classList.contains("armed")) { a.classList.add("armed"); a.textContent = "Tap again to discard"; setTimeout(() => { a.classList.remove("armed"); a.textContent = "Discard"; }, 3500); return; }
+      draft.clear(liveKey()); S.live = null; render(); return;
+    }
+    if (act === "live-next" || act === "live-prev") {
+      const L = S.live, h = L.card[L.cur];
+      if (act === "live-next" && h.score == null) { toast("Tap your score for this hole first."); return; }
+      L.cur += act === "live-next" ? 1 : -1; saveLive(); render(); window.scrollTo(0, 0); return;
+    }
+    if (act === "live-finish") { S.live.finishing = true; saveLive(); render(); window.scrollTo(0, 0); return; }
+    if (act === "live-back") { S.live.finishing = false; saveLive(); render(); return; }
     if (act === "review-round") { reviewRound(S.sheet.id); return; }
     if (act === "review-game") {
       const g = GAMES.find(x => x.id === a.dataset.game);
@@ -527,6 +679,7 @@ export function start(root, { students, onSignOut }) {
     }
   };
   root.onchange = async e => {
+    if (e.target.dataset?.lvsel && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvsel, e.target.value); saveLive(); return; }
     const id = e.target.dataset?.task;
     if (!id) return;
     const p = S.entries.find(x => x.id === id);
@@ -549,6 +702,7 @@ export function start(root, { students, onSignOut }) {
         else render();
       }
     }
+    if (e.target.id === "liveForm") { await liveSave(); return; }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();
       const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
@@ -581,6 +735,8 @@ export function start(root, { students, onSignOut }) {
   root.oninput = e => {
     const id = e.target.id || "";
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
+    if (e.target.dataset?.lvin && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvin, e.target.value.replace(/[^0-9]/g, "")); saveLive(); }
+    if (id === "lv-notes" && S.live) { S.live.notes = e.target.value; saveLive(); }
     if (id && e.target.matches(DRAFTABLE)) draft.set(`${S.sid}.${id}`, e.target.value);
     if (id === "calc") {
       const v = +e.target.value;

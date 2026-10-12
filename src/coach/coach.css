@@ -187,3 +187,4 @@ a{color:var(--pine)}
 .rv-box{background:var(--pine-soft);font-size:14px}
 .rv-box h4{margin:0 0 6px}
 .rv-box ul{margin:2px 0 0;padding-left:18px}
+.holes-t{font-size:12px}.holes-t td,.holes-t th{white-space:nowrap}

@@ -42,6 +42,7 @@ Rules:
 - Plain words a 12-year-old or an adult beginner understands. Encouraging but honest. No swing-mechanics advice; leave technique to Karina.
 - Only use facts in the data. If a stat is missing, don't guess it; you can suggest tracking it next time.
 - Never mention injuries, medical advice or equipment purchases.
+- If hole-by-hole data and patterns are provided, use them: name the miss pattern off the tee (left/right, and whether misses started on target and curved, or started off target and stayed there), approach misses by direction, club and distance, landing-spot accuracy on chips, bunker results, first-putt distances and 3-putts, and where penalties came from. Describe the pattern; leave the swing fix to Karina (e.g. "Bring this pattern to your next lesson").
 - headline: one sentence summing up the round.
 - good: 1–2 short bullets. cost: 1–3 short bullets on where strokes were lost, with numbers when available (e.g. "3 three-putts ≈ 3 strokes").
 - focus: one sentence, the single most important thing to practice this week.
@@ -69,11 +70,12 @@ async function review(p, env) {
   const games = (Array.isArray(p.games) ? p.games : []).slice(0, 60).map(g => ({ id: clip(g.id, 40), name: clip(g.name, 80), place: clip(g.place, 20), helps: (g.helps || []).slice(0, 5).map(h => clip(h, 20)) }));
   const pl = p.player || {};
   const user = JSON.stringify({
-    round, previous_rounds: (p.previous || []).slice(0, 5), target_score: +p.target || null, benchmark_for_target: p.benchmark || null,
+    round, patterns: p.patterns || null, holes: Array.isArray(p.holes) ? p.holes.slice(0, 18) : null, previous_rounds: (p.previous || []).slice(0, 5), target_score: +p.target || null, benchmark_for_target: p.benchmark || null,
     player: { handicap: clip(pl.handicap, 10), group: clip(pl.group, 10), goals: Object.fromEntries(Object.entries(pl.goals || {}).slice(0, 4).map(([k, v]) => [clip(k, 10), clip(v, 200)])), current_drills: (pl.drills || []).slice(0, 6).map(d => clip(d, 60)) },
     game_library: games
   });
-  const out = await claude(env, REVIEW_SYSTEM, user, 800);
+  if (user.length > 20000) return json({ error: "This round has too much data to review." }, 400);
+  const out = await claude(env, REVIEW_SYSTEM, user, 900);
   if (!out) return json({ error: "Couldn't review right now. Try again." }, 502);
   const list = (a, n) => (Array.isArray(a) ? a : []).slice(0, n).map(x => clip(x, 200)).filter(Boolean);
   return json({

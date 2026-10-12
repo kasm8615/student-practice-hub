@@ -1,6 +1,7 @@
 // In-memory stand-in for the database, used only for previews (VITE_DEMO=1).
 // Open with ?as=coach or ?as=student to pick who is signed in.
 import { today } from "./util.js";
+import { newHole, totals, patterns } from "./roundstats.js";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const now = () => new Date().toISOString();
@@ -34,6 +35,9 @@ add(S1, "lesson", { date: dayOffset(-26), kind: "Playing lesson", focus: "Wedge 
  ["Fri", "Short game", "Wedge clock", "7:30, 9:00, 10:30 with the 56", 30, clock.id, false],
  ["Sat", "On course", "9 holes, play it forward", "Track putts and up & downs", 60, "", false]
 ].forEach(([day, area, title, details, minutes, drill, done]) => add(S1, "plan", { day, area, title, details, minutes, drill, done }));
+{ const card = [[4, 5, "R", "curve", ["S", "R"], "6 iron", 160, 2, 9], [3, 3, "", "", ["G"], "8 iron", 145, 2, 24], [5, 7, "R", "off", ["G"], "PW", 95, 3, 38], [4, 4, "fw", "", ["L"], "9 iron", 130, 1, 4]]
+    .map(([par, score, res, start, app, club, yds, putts, fp], i) => ({ ...newHole(i + 1, par), score, putts, fp: String(fp), tee: { res, start, club: "Driver" }, app: { res: app, club, yds: String(yds) }, sg: { kind: "chip", shots: 1, land: app.includes("G") ? "" : "short", out: null }, ...(i === 2 ? { pen: 1, penFrom: "tee" } : {}) }));
+  const t = totals(card); add(S1, "stat", { date: dayOffset(-2), event: "Casual", course: "Renaissance Park", ...t, holes: "9", mode: "full", card, patterns: patterns(card), notes: "Front 4 only" }, "student"); }
 add(S1, "stat", { date: dayOffset(-10), event: "Casual", course: "Charlotte Golf Links", holes: "18", score: 87, fairways: "8/14", gir: 6, putts: 33 }, "student");
 add(S1, "stat", { date: dayOffset(-31), event: "Practice round", course: "Renaissance Park", holes: "18", score: 89, fairways: "7/14", gir: 5, putts: 34 });
 add(S1, "stat", { date: dayOffset(-52), event: "Casual", course: "Renaissance Park", holes: "18", score: 92, fairways: "6/14", gir: 4, putts: 36 });

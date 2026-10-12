@@ -4,6 +4,7 @@ import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
+import { patternLines } from "../lib/roundstats.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
@@ -316,8 +317,8 @@ export function start(root, { onSignOut }) {
         <div class="kpi"><div class="l">Rounds</div><div class="v">${r.length}</div></div></div>
         <div class="box">${chart(r)}</div>
         <div class="scroll"><table class="card"><thead><tr><th>Date</th><th>Course</th><th>Type</th><th class="n">Holes</th><th class="n">Score</th><th class="n">FW</th><th class="n">GIR</th><th class="n">Putts</th><th class="n">U&amp;D</th><th class="n">Pen</th></tr></thead>
-        <tbody>${r.map(e => `<tr class="row" data-edit="${esc(e.id)}" tabindex="0"><td>${esc(fmtDate(e.date))}${e.author === "student" ? " ·&nbsp;S" : ""}${e.review ? " ✨" : ""}</td><td>${esc(e.course)}</td><td>${esc(e.event)}</td><td class="n">${esc(e.holes || "18")}</td><td class="n"><b>${esc(e.score)}</b></td><td class="n">${esc(e.fairways)}</td><td class="n">${esc(e.gir)}</td><td class="n">${esc(e.putts)}</td><td class="n">${esc(e.updown)}</td><td class="n">${esc(e.penalties)}</td></tr>`).join("")}</tbody></table></div>
-        <p style="font-size:12px;color:var(--ink-3);margin:0">S = logged by the student. ✨ = has an AI round review.</p>
+        <tbody>${r.map(e => `<tr class="row" data-edit="${esc(e.id)}" tabindex="0"><td>${esc(fmtDate(e.date))}${e.author === "student" ? " ·&nbsp;S" : ""}${e.card ? " ⛳" : ""}${e.review ? " ✨" : ""}</td><td>${esc(e.course)}</td><td>${esc(e.event)}</td><td class="n">${esc(e.holes || "18")}</td><td class="n"><b>${esc(e.score)}</b></td><td class="n">${esc(e.fairways)}</td><td class="n">${esc(e.gir)}</td><td class="n">${esc(e.putts)}</td><td class="n">${esc(e.updown)}</td><td class="n">${esc(e.penalties)}</td></tr>`).join("")}</tbody></table></div>
+        <p style="font-size:12px;color:var(--ink-3);margin:0">S = logged by the student. ⛳ = logged hole by hole. ✨ = has an AI round review.</p>
         ${r.filter(e => e.review).slice(0, 3).map(e => `<div class="box rv-box" data-edit="${esc(e.id)}" role="button" tabindex="0"><h4>✨ ${esc(fmtDate(e.date))} · ${esc(e.score)}${e.course ? " at " + esc(e.course) : ""}</h4>${reviewBody(e.review)}</div>`).join("")}` : empty(t));
     }
     if (t === "plan") {
@@ -381,6 +382,17 @@ export function start(root, { onSignOut }) {
         : `<div class="empty">No practice logged yet. ${first} logs sessions from the Plan screen or Home.</div>`}`;
   }
 
+  function holesTable(card) {
+    const dir = { G: "Green", S: "Short", Lg: "Long", L: "Left", R: "Right" };
+    return `<div class="box scroll"><h4>Hole by hole</h4><table class="card holes-t"><thead><tr><th>#</th><th>Par</th><th>Score</th><th>Tee</th><th>Into green</th><th>Around green</th><th class="n">1st putt</th><th class="n">Putts</th><th>Trouble</th></tr></thead><tbody>
+      ${card.map(h => `<tr><td>${h.n}</td><td>${h.par}</td><td><b>${h.score}</b></td>
+        <td>${h.par >= 4 ? esc([{ fw: "Fairway", L: "Left", R: "Right" }[h.tee?.res], h.tee?.start === "curve" ? "curved" : h.tee?.start === "off" ? "started off" : "", h.tee?.club && h.tee.res ? `(${h.tee.club})` : ""].filter(Boolean).join(" ")) : ""}</td>
+        <td>${esc([(h.app?.res || []).map(r => dir[r]).join("-"), h.app?.club, h.app?.yds ? h.app.yds + " yds" : ""].filter(Boolean).join(", "))}</td>
+        <td>${(h.app?.res || []).length && !h.app.res.includes("G") ? esc(h.sg?.kind === "bunker" ? `Bunker${h.sg.out === true ? ", out in one" : h.sg.out === false ? ", not out in one" : ""}` : { on: "Chip on spot", short: "Chip landed short", long: "Chip landed long" }[h.sg?.land] || "") : ""}</td>
+        <td class="n">${h.fp ? esc(h.fp) + " ft" : ""}</td><td class="n">${h.putts ?? ""}</td>
+        <td>${esc([h.pen ? `${h.pen} pen${h.penFrom ? " (" + ({ tee: "tee", app: "approach", other: "other" }[h.penFrom]) + ")" : ""}` : "", h.rec ? "recovery" : ""].filter(Boolean).join(", "))}</td></tr>`).join("")}
+      </tbody></table></div>`;
+  }
   function reviewBody(rv) {
     const g = GAMES.find(x => x.id === rv.game_id);
     const li = a => (a || []).map(x => `<li>${esc(x)}</li>`).join("");
@@ -499,7 +511,9 @@ export function start(root, { onSignOut }) {
         if (type === "plan" && d.drill && !d.area) { const dr = of("drill").find(x => x.id === d.drill); if (dr) d.area = dr.category; }
         return !!(e ? await write(api.updateEntry(e, d), "Saved") : await write(api.addEntry(S.sel, type, d), T.one + " added"));
       },
-      extra: e && e.review ? `<div class="box rv-box"><h4>✨ AI round review (what the student saw)</h4>${reviewBody(e.review)}</div>` : "",
+      extra: (e && e.patterns ? `<div class="box"><h4>Patterns (${esc(e.mode === "full" ? "full" : "quick")} hole-by-hole)</h4>${patternLines(e.patterns).map(([k, v]) => `<p style="margin-top:4px"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</div>` : "")
+        + (e && Array.isArray(e.card) ? holesTable(e.card) : "")
+        + (e && e.review ? `<div class="box rv-box"><h4>✨ AI round review (what the student saw)</h4>${reviewBody(e.review)}</div>` : ""),
       onDelete: e ? () => write(api.deleteEntry(e.id), "Deleted") : null
     });
   }

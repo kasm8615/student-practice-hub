@@ -97,3 +97,7 @@ To switch on **✨ Tailor to me** (personal tips and targets written by Claude):
 1. console.anthropic.com → sign up → add a small credit (e.g. $5) → **API Keys → Create Key**.
 2. Cloudflare → student-practice-hub → **Settings → Variables and Secrets** → add `ANTHROPIC_API_KEY` as type **Secret**.
 3. Redeploy (any push). Each tailored session costs well under 1 cent. Without the key, the button simply doesn't show.
+
+## Hole-by-hole round tracking
+
+Rounds → **Track a round hole by hole**. Quick mode: score, putts, fairway, penalties. Full mode adds tee-shot miss and start line (started on target and curved, or started off target), approach distance, club and miss direction, chip landing spot or bunker result, first-putt distance, penalty source and recovery shots. Progress is saved on the phone after every tap and can be resumed. On finish the app saves totals, the hole-by-hole card and the miss patterns (`src/lib/roundstats.js`), and the AI review uses them.
