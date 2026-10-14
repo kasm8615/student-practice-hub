@@ -71,3 +71,49 @@ export function clubsFor(bag, yds) {
   if (!y || !c.length) return [];
   return c.slice().sort((a, b) => Math.abs(a.carry - y) - Math.abs(b.carry - y)).slice(0, 2).sort((a, b) => b.carry - a.carry);
 }
+
+// ---------- Wedge system (clock): backswing length × wedge = carry
+export const SWINGS = [["730", "7:30"], ["900", "9:00"], ["1030", "10:30"], ["full", "Full"]];
+const SHARE = { "730": 0.45, "900": 0.66, "1030": 0.83, full: 1 }; // typical share of a full wedge's carry
+export const WEDGES = ["PW", "GW", "SW", "LW"];
+
+// Starting setup for each swing length. Students (or Karina) change it to match their lessons.
+export const DEFAULT_SETUP = {
+  "730": { face: "square", ball: "center", grip: "down2", stance: "narrow" },
+  "900": { face: "square", ball: "center", grip: "down1", stance: "narrow" },
+  "1030": { face: "square", ball: "center", grip: "down1", stance: "normal" },
+  full: { face: "square", ball: "center", grip: "normal", stance: "normal" }
+};
+export const SETUP_OPTS = {
+  face: [["square", "Square"], ["open", "Open"]],
+  ball: [["back", "Back"], ["center", "Center"], ["forward", "Forward"]],
+  grip: [["normal", "Normal"], ["down1", "Down 1 in"], ["down2", "Down 2 in"]],
+  stance: [["narrow", "Narrow"], ["normal", "Normal"]]
+};
+
+export function newWedges(bag) {
+  const inBag = (bag || []).filter(c => c.on !== false && WEDGES.includes(c.club)).map(c => c.club);
+  const clubs = inBag.length ? WEDGES.filter(w => inBag.includes(w)) : WEDGES.slice(0, 3);
+  return { rows: clubs.map(club => ({ club, d: { "730": "", "900": "", "1030": "", full: "" } })), setup: JSON.parse(JSON.stringify(DEFAULT_SETUP)) };
+}
+
+// Fills empty cells from each wedge's full carry (from the cell or from the bag).
+export function estimateWedges(w, bag) {
+  const full = club => +(w.rows.find(r => r.club === club)?.d.full) || +((bag || []).find(c => c.club === club)?.carry) || 0;
+  let n = 0;
+  const rows = w.rows.map(r => {
+    const f = full(r.club); if (!f) return r;
+    const d = { ...r.d };
+    for (const [k] of SWINGS) if (!d[k]) { d[k] = String(Math.round(f * SHARE[k])); n++; }
+    return { ...r, d };
+  });
+  return { wedges: { ...w, rows }, count: n };
+}
+
+// The wedge swings closest to a distance (for hints inside 120 yards).
+export function wedgeFor(w, yds) {
+  const y = +yds; if (!w || !y || y > 125) return [];
+  const all = [];
+  (w.rows || []).forEach(r => SWINGS.forEach(([k, l]) => { if (+r.d?.[k] > 0) all.push({ club: r.club, swing: l, carry: +r.d[k] }); }));
+  return all.sort((a, b) => Math.abs(a.carry - y) - Math.abs(b.carry - y)).slice(0, 2);
+}

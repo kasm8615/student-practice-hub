@@ -242,3 +242,25 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .gap-note{margin:0;font-size:13px;background:var(--warn-soft);border-radius:10px;padding:8px 12px}
 .bag-hint{margin:0;font-size:13px;color:var(--pine);font-weight:600}
 .bag-hint:empty{display:none}
+/* wedge system */
+.pick.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pick.seg .pick-btn{padding:10px;font-size:14px;text-align:center}
+.clock-wrap{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center}
+.clock{width:130px;height:auto}
+.ck-face{fill:var(--surface-2);stroke:var(--line);stroke-width:2}
+.ck-n{font-size:11px;fill:var(--ink-3);font-weight:700}
+.ck-h1,.ck-h2,.ck-h3{stroke-width:4;stroke-linecap:round}
+.ck-h1{stroke:var(--a2)}.ck-h2{stroke:var(--pine)}.ck-h3{stroke:var(--a3)}
+.ck-l{font-size:10px;font-weight:700;fill:var(--ink)}
+.ck-c{fill:var(--ink)}
+.ck-cap{font-size:8.5px;fill:var(--ink-3)}
+.tempo{margin:8px 0 0;font-size:13px;background:var(--flag-soft);border-radius:10px;padding:8px 10px}
+.wedge-t{border-collapse:separate;border-spacing:4px;width:100%}
+.wedge-t th{font-size:12px;color:var(--ink-3);font-weight:700}
+.wedge-t tbody th{text-align:left;font-size:15px;color:var(--ink);padding-right:2px}
+.wedge-t .lv-num{width:100%;min-width:52px;padding:8px 4px}
+.setup-card{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
+.setup-h{font-size:14px}
+.setup-row{display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;font-size:12px;font-weight:600;color:var(--ink-3)}
+.setup-row .pick-btn{background:var(--surface)}
+.setup-row .pick-btn[aria-pressed="true"]{background:var(--pine)}

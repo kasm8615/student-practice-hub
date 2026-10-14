@@ -4,7 +4,7 @@ import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
 import { trendHtml } from "../lib/trend.js";
-import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor } from "../lib/bag.js";
+import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor, SWINGS, SETUP_OPTS, newWedges, estimateWedges, wedgeFor } from "../lib/bag.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
@@ -52,7 +52,7 @@ export function start(root, { students, onSignOut }) {
   root.addEventListener("focusout", () => setTimeout(() => { if (pendingReload && !typing()) { pendingReload = false; load(); } }, 50));
   function select(id) {
     S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false; S.live = draft.get(`${id}.live`); S.liveSetup = null;
-    S.profile = null; S.entries = []; S.scores = []; S.bagDraft = null; S.planWeek = null; S.reviews = {}; S.bagBusy = false;
+    S.profile = null; S.entries = []; S.scores = []; S.bagDraft = null; S.wedgeDraft = null; S.bagTab = "bag"; S.planWeek = null; S.reviews = {}; S.bagBusy = false;
     S.game = { ...S.game, ai: null, aiBusy: false, pin: null, seed: 0 };
     { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
@@ -77,6 +77,8 @@ export function start(root, { students, onSignOut }) {
   const goal = () => of("goal")[0] || null;
   const bagEntry = () => of("bag")[0] || null;
   const myBag = () => bagEntry()?.clubs || [];
+  const myWedges = () => bagEntry()?.wedges || null;
+  const wedgeLines = () => (myWedges()?.rows || []).flatMap(r => SWINGS.filter(([k]) => +r.d?.[k] > 0).map(([k, l]) => `${r.club} ${l} swing ${r.d[k]}`));
   const sessions = () => byDateDesc(of("session"));
   const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - todayIndex()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const targetScore = () => {
@@ -282,7 +284,7 @@ export function start(root, { students, onSignOut }) {
         holes: Array.isArray(r.card) ? r.card.map(h => ({ n: h.n, par: h.par, score: h.score, putts: h.putts, first_putt_ft: h.fp, penalties: h.pen, penalty_from: h.penFrom, recovery: h.rec, tee: h.par >= 4 ? h.tee : undefined, approach: h.app, around_green: (h.app?.res || []).length && !h.app.res.includes("G") ? h.sg : undefined })) : null,
         previous: prev, target: targetScore(),
         benchmark: String(r.holes || "18") === "18" ? benchmark(targetScore()) : null,
-        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name), club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) },
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name), club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`).concat(wedgeLines()) },
         games: GAMES.map(x => ({ id: x.id, name: x.name, place: x.place, helps: x.helps }))
       });
       if (!S.entries.some(e => e.id === id)) return; // player switched
@@ -335,12 +337,52 @@ export function start(root, { students, onSignOut }) {
         <span class="sc">${esc(x.score)}</span></button>`; }).join("") || `<p class="muted">No rounds yet. Log your next one after you play.</p>`}</section></main>`;
   }
   // ---------- club distances
+  function bagTabs() {
+    return `<div class="pick seg">${[["bag", "Full bag"], ["wedges", "Wedge system"]].map(([k, l]) => `<button type="button" class="pick-btn" data-bagtab="${k}" aria-pressed="${(S.bagTab || "bag") === k}">${l}</button>`).join("")}</div>`;
+  }
+  function clockSvg() {
+    const cx = 70, cy = 70, r = 54, pt = (h, rr) => { const a = h * Math.PI / 6; return [cx + rr * Math.sin(a), cy - rr * Math.cos(a)]; };
+    const hand = (h, cls, label) => { const [x, y] = pt(h, r - 6), [lx, ly] = pt(h, r + 12); return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="${cls}"/><text x="${lx}" y="${ly + 4}" text-anchor="middle" class="ck-l">${label}</text>`; };
+    return `<svg class="clock" viewBox="-16 0 172 150" role="img" aria-label="Clock positions for the lead arm: 7:30, 9:00 and 10:30">
+      <circle cx="${cx}" cy="${cy}" r="${r}" class="ck-face"/>
+      ${[12, 3, 6].map(h => { const [x, y] = pt(h, r - 12); return `<text x="${x}" y="${y + 4}" text-anchor="middle" class="ck-n">${h}</text>`; }).join("")}
+      ${hand(7.5, "ck-h1", "7:30")}${hand(9, "ck-h2", "9:00")}${hand(10.5, "ck-h3", "10:30")}
+      <circle cx="${cx}" cy="${cy}" r="4" class="ck-c"/><text x="${cx}" y="146" text-anchor="middle" class="ck-cap">Lead arm, seen from in front</text></svg>`;
+  }
+  function wedgeScreen() {
+    if (!S.wedgeDraft) S.wedgeDraft = draft.get(`${S.sid}.wedgedraft`) || (myWedges() ? JSON.parse(JSON.stringify(myWedges())) : newWedges(myBag()));
+    const w = S.wedgeDraft;
+    const opt = (k, f) => `<div class="pick">${SETUP_OPTS[f].map(([v, l]) => `<button type="button" class="pick-btn sm" data-ws="${k}.${f}" data-val="${v}" aria-pressed="${w.setup?.[k]?.[f] === v}">${l}</button>`).join("")}</div>`;
+    return top("My bag", S.profile?.name || "") + `<main class="s-content">${bagTabs()}
+      <section class="card"><h2>The clock system</h2>
+        <div class="clock-wrap">${clockSvg()}<div><p class="muted" style="color:var(--ink-2)">Picture your lead arm as the hand of a clock. At address it points to 6. Stop your backswing with the arm at <b>7:30</b>, <b>9:00</b> or <b>10:30</b>, then swing through to the same length on the other side.</p>
+          <p class="tempo"><b>Same tempo every time.</b> The length of the backswing changes the distance, not the speed. Count "one" back, "two" through.</p></div></div>
+      </section>
+      <form id="wedgeForm" class="card" novalidate><h2>Your wedge distances <span>carry, yards</span></h2>
+        <div class="scroll"><table class="wedge-t"><thead><tr><th></th>${SWINGS.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead>
+          <tbody>${w.rows.map((r, i) => `<tr><th>${esc(r.club)}</th>${SWINGS.map(([k, l]) => `<td><input class="lv-num" data-wd="${i}.${k}" inputmode="numeric" value="${esc(r.d[k] || "")}" placeholder="–" aria-label="${esc(r.club)} ${l} carry"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="row2"><button type="button" class="btn" data-act="wedge-est">Estimate from full</button><button type="button" class="btn" data-act="wedge-row">+ Add wedge</button></div>
+        <p class="muted">Fill "Full" for each wedge (or save your full bag first), then Estimate. Estimates are a starting point: hit 5 balls with each swing at the range and write what really carries.</p>
+        <h2 style="margin-top:6px">Setup for each swing</h2>
+        ${SWINGS.map(([k, l]) => `<div class="setup-card"><b class="setup-h">${l} swing</b>
+          <div class="setup-row"><span>Face</span>${opt(k, "face")}</div>
+          <div class="setup-row"><span>Ball</span>${opt(k, "ball")}</div>
+          <div class="setup-row"><span>Grip</span>${opt(k, "grip")}</div>
+          <div class="setup-row"><span>Stance</span>${opt(k, "stance")}</div></div>`).join("")}
+        <p class="muted">These are starting setups. Change them to match what Karina taught you. Open face = higher and softer, a little shorter.</p>
+        <button class="btn primary" type="submit">Save my wedge system</button>
+        ${myWedges() ? `<p class="muted" style="text-align:center">Saved. Karina sees your wedge system.</p>` : ""}
+      </form>
+      <button class="btn" data-act="wedge-practice">Practice it: Wedge distance ladder</button>
+    </main>`;
+  }
   function bagScreen() {
+    if (S.bagTab === "wedges") return wedgeScreen();
     if (!S.bagDraft) S.bagDraft = sortBag(myBag().length ? myBag().map(c => ({ ...c })) : newBag());
     const bag = S.bagDraft, e = bagEntry();
     const c = carried(bag), max = c.length ? c[0].carry : 1;
     const notes = gapNotes(bag);
-    return top("My bag", S.profile?.name || "") + `<main class="s-content">
+    return top("My bag", S.profile?.name || "") + `<main class="s-content">${bagTabs()}
       <section class="card"><h2>Fill it in fast</h2>
         <label class="btn primary photo-btn">${S.bagBusy ? "Reading your photo…" : "📷 Read from a photo"}<input type="file" accept="image/*" id="bagPhoto" hidden ${S.bagBusy ? "disabled" : ""}></label>
         <p class="muted">A photo or screenshot of a launch monitor report, a yardage card, or a list you wrote. You check the numbers before saving.</p>
@@ -362,7 +404,11 @@ export function start(root, { students, onSignOut }) {
         ${notes.map(n => `<p class="gap-note">${esc(n)}</p>`).join("")}</section>` : ""}
     </main>`;
   }
-  const bagHint = yds => { const c = clubsFor(myBag(), yds); return c.length ? "Your bag: " + c.map(x => `${x.club} ${x.carry}`).join(" · ") : ""; };
+  const bagHint = yds => {
+    const w = wedgeFor(myWedges(), yds);
+    if (w.length) return "Your wedges: " + w.map(x => `${x.club} ${x.swing} → ${x.carry}`).join(" · ");
+    const c = clubsFor(myBag(), yds); return c.length ? "Your bag: " + c.map(x => `${x.club} ${x.carry}`).join(" · ") : ""; };
+  const keepWedge = () => draft.set(`${S.sid}.wedgedraft`, S.wedgeDraft);
   const keepBag = () => draft.set(`${S.sid}.bagdraft`, S.bagDraft);
   async function readBagPhoto(file) {
     if (!file) return;
@@ -667,14 +713,14 @@ export function start(root, { students, onSignOut }) {
       const res = await api.tailorSession({
         place: S.game.place, minutes: S.game.minutes, focus, week: S.game.week, days_to_tournament: S.game.week === "tournament" ? daysOut() : null,
         games: games.map(x => ({ id: x.id, name: x.name, setup: x.setup, score: x.score, target: x.pass[levelOf(S.profile?.handicap)] })),
-        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent, club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) }
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent, club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`).concat(wedgeLines()) }
       });
       if (sid !== S.sid) return;
       S.game.ai = { ...res, key: sessionKey(games) };
     } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't tailor right now. The games still work as they are."); }
     S.game.aiBusy = false; render();
   }
-  function go(screen) { if (root.querySelector(".vprog")) { toast("Wait for the video to finish uploading."); return; } if (screen === "plan" && S.screen !== "plan") S.planWeek = null; if (screen === "bag" && S.screen !== "bag") S.bagDraft = draft.get(`${S.sid}.bagdraft`); S.screen = screen; S.liveSetup = null; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
+  function go(screen) { if (root.querySelector(".vprog")) { toast("Wait for the video to finish uploading."); return; } if (screen === "plan" && S.screen !== "plan") S.planWeek = null; if (screen === "bag" && S.screen !== "bag") { S.bagDraft = draft.get(`${S.sid}.bagdraft`); S.wedgeDraft = null; } S.screen = screen; S.liveSetup = null; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
   function openScore(entryId, drillId) {
     const p = S.entries.find(e => e.id === entryId);
     const dr = drillById(drillId || p?.drill);
@@ -707,6 +753,9 @@ export function start(root, { students, onSignOut }) {
     const pw = t.closest("[data-pweek]"); if (pw) { S.planWeek = addDays(S.planWeek || weekStartOf(), +pw.dataset.pweek); render(); return; }
     const tr = t.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
     if (tr) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
+    const bt = t.closest("[data-bagtab]"); if (bt) { S.bagTab = bt.dataset.bagtab; render(); window.scrollTo(0, 0); return; }
+    const ws = t.closest("[data-ws]");
+    if (ws && S.wedgeDraft) { const [k, f] = ws.dataset.ws.split("."); S.wedgeDraft.setup = S.wedgeDraft.setup || {}; S.wedgeDraft.setup[k] = { ...(S.wedgeDraft.setup[k] || {}), [f]: ws.dataset.val }; keepWedge(); render(); return; }
     const gw = t.closest("[data-gweek]"); if (gw) { S.game.week = gw.dataset.gweek; S.game.seed = 0; S.game.pin = null; S.game.ai = null; saveWeek(); render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
     const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }
@@ -728,6 +777,20 @@ export function start(root, { students, onSignOut }) {
     if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; S.game.pin = null; render(); window.scrollTo(0, 0); return; }
     if (act === "game-log") { logGames(); return; }
     if (act === "game-ai") { tailor(); return; }
+    if (act === "wedge-est") {
+      const { wedges, count } = estimateWedges(S.wedgeDraft, myBag());
+      if (!count) { toast("Add the Full carry for at least one wedge first."); return; }
+      S.wedgeDraft = wedges; keepWedge(); toast("Estimated. Test them at the range, then fix the numbers."); render(); return;
+    }
+    if (act === "wedge-row") {
+      const have = S.wedgeDraft.rows.map(r => r.club), next = ["PW", "GW", "SW", "LW"].find(c => !have.includes(c));
+      if (!next) { toast("All four wedges are already in your chart."); return; }
+      S.wedgeDraft.rows.push({ club: next, d: { "730": "", "900": "", "1030": "", full: "" } });
+      S.wedgeDraft.rows.sort((a, b) => ["PW", "GW", "SW", "LW"].indexOf(a.club) - ["PW", "GW", "SW", "LW"].indexOf(b.club)); keepWedge(); render(); return;
+    }
+    if (act === "wedge-practice") {
+      S.game = { ...S.game, place: "range", minutes: 30, pin: "wedgeladder", seed: 0, ai: null, week: "normal" }; go("games"); return;
+    }
     if (act === "bag-est") {
       const v = +root.querySelector("#bag7").value;
       if (!(v >= 60 && v <= 250)) { toast("Type your 7-iron carry first, e.g. 140."); return; }
@@ -819,6 +882,14 @@ export function start(root, { students, onSignOut }) {
       }
     }
     if (e.target.id === "liveForm") { await liveSave(); return; }
+    if (e.target.id === "wedgeForm") {
+      const wedges = { rows: S.wedgeDraft.rows, setup: S.wedgeDraft.setup };
+      if (!wedges.rows.some(r => Object.values(r.d).some(v => +v > 0))) { toast("Add at least one distance first."); return; }
+      const e0 = bagEntry();
+      const ok = await run(() => e0 ? api.updateEntry(e0, { wedges }) : api.addEntry(S.sid, "bag", { clubs: [], wedges }), "Wedge system saved");
+      if (ok) { draft.clear(`${S.sid}.wedgedraft`); S.wedgeDraft = null; render(); }
+      return;
+    }
     if (e.target.id === "bagForm") {
       const clubs = sortBag(S.bagDraft.filter(c => c.club.trim()).map(c => ({ club: c.club.trim(), carry: c.carry, total: c.total, on: c.on !== false })));
       if (!clubs.some(c => +c.carry > 0)) { toast("Add at least one carry distance."); return; }
@@ -859,6 +930,7 @@ export function start(root, { students, onSignOut }) {
   root.oninput = e => {
     const id = e.target.id || "";
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
+    if (e.target.dataset?.wd && S.wedgeDraft) { const [i, k] = e.target.dataset.wd.split("."); S.wedgeDraft.rows[+i].d[k] = e.target.value.replace(/[^0-9]/g, ""); keepWedge(); }
     if (e.target.dataset?.bag && S.bagDraft) { const [i, k] = e.target.dataset.bag.split("."); S.bagDraft[+i][k] = k === "club" ? e.target.value : e.target.value.replace(/[^0-9]/g, ""); keepBag(); }
     if (e.target.dataset?.lvin && S.live) {
       setPath(S.live.card[S.live.cur], e.target.dataset.lvin, e.target.value.replace(/[^0-9]/g, "")); saveLive();
