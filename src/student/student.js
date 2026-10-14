@@ -4,7 +4,7 @@ import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
 import { trendHtml } from "../lib/trend.js";
-import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor, SWINGS, SETUP_OPTS, newWedges, estimateWedges, wedgeFor } from "../lib/bag.js";
+import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor, SWINGS, newWedges, estimateWedges, wedgeFor } from "../lib/bag.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
@@ -352,7 +352,6 @@ export function start(root, { students, onSignOut }) {
   function wedgeScreen() {
     if (!S.wedgeDraft) S.wedgeDraft = draft.get(`${S.sid}.wedgedraft`) || (myWedges() ? JSON.parse(JSON.stringify(myWedges())) : newWedges(myBag()));
     const w = S.wedgeDraft;
-    const opt = (k, f) => `<div class="pick">${SETUP_OPTS[f].map(([v, l]) => `<button type="button" class="pick-btn sm" data-ws="${k}.${f}" data-val="${v}" aria-pressed="${w.setup?.[k]?.[f] === v}">${l}</button>`).join("")}</div>`;
     return top("My bag", S.profile?.name || "") + `<main class="s-content">${bagTabs()}
       <section class="card"><h2>The clock system</h2>
         <div class="clock-wrap">${clockSvg()}<div><p class="muted" style="color:var(--ink-2)">Picture your lead arm as the hand of a clock. At address it points to 6. Stop your backswing with the arm at <b>7:30</b>, <b>9:00</b> or <b>10:30</b>, then swing through to the same length on the other side.</p>
@@ -363,13 +362,6 @@ export function start(root, { students, onSignOut }) {
           <tbody>${w.rows.map((r, i) => `<tr><th>${esc(r.club)}</th>${SWINGS.map(([k, l]) => `<td><input class="lv-num" data-wd="${i}.${k}" inputmode="numeric" value="${esc(r.d[k] || "")}" placeholder="–" aria-label="${esc(r.club)} ${l} carry"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <div class="row2"><button type="button" class="btn" data-act="wedge-est">Estimate from full</button><button type="button" class="btn" data-act="wedge-row">+ Add wedge</button></div>
         <p class="muted">Fill "Full" for each wedge (or save your full bag first), then Estimate. Estimates are a starting point: hit 5 balls with each swing at the range and write what really carries.</p>
-        <h2 style="margin-top:6px">Setup for each swing</h2>
-        ${SWINGS.map(([k, l]) => `<div class="setup-card"><b class="setup-h">${l} swing</b>
-          <div class="setup-row"><span>Face</span>${opt(k, "face")}</div>
-          <div class="setup-row"><span>Ball</span>${opt(k, "ball")}</div>
-          <div class="setup-row"><span>Grip</span>${opt(k, "grip")}</div>
-          <div class="setup-row"><span>Stance</span>${opt(k, "stance")}</div></div>`).join("")}
-        <p class="muted">These are starting setups. Change them to match what Karina taught you. Open face = higher and softer, a little shorter.</p>
         <button class="btn primary" type="submit">Save my wedge system</button>
         ${myWedges() ? `<p class="muted" style="text-align:center">Saved. Karina sees your wedge system.</p>` : ""}
       </form>
@@ -754,8 +746,6 @@ export function start(root, { students, onSignOut }) {
     const tr = t.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
     if (tr) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
     const bt = t.closest("[data-bagtab]"); if (bt) { S.bagTab = bt.dataset.bagtab; render(); window.scrollTo(0, 0); return; }
-    const ws = t.closest("[data-ws]");
-    if (ws && S.wedgeDraft) { const [k, f] = ws.dataset.ws.split("."); S.wedgeDraft.setup = S.wedgeDraft.setup || {}; S.wedgeDraft.setup[k] = { ...(S.wedgeDraft.setup[k] || {}), [f]: ws.dataset.val }; keepWedge(); render(); return; }
     const gw = t.closest("[data-gweek]"); if (gw) { S.game.week = gw.dataset.gweek; S.game.seed = 0; S.game.pin = null; S.game.ai = null; saveWeek(); render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
     const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }
@@ -883,7 +873,7 @@ export function start(root, { students, onSignOut }) {
     }
     if (e.target.id === "liveForm") { await liveSave(); return; }
     if (e.target.id === "wedgeForm") {
-      const wedges = { rows: S.wedgeDraft.rows, setup: S.wedgeDraft.setup };
+      const wedges = { rows: S.wedgeDraft.rows };
       if (!wedges.rows.some(r => Object.values(r.d).some(v => +v > 0))) { toast("Add at least one distance first."); return; }
       const e0 = bagEntry();
       const ok = await run(() => e0 ? api.updateEntry(e0, { wedges }) : api.addEntry(S.sid, "bag", { clubs: [], wedges }), "Wedge system saved");
