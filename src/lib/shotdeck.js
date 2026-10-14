@@ -48,7 +48,11 @@ const SHAPES = ["straight", "draw", "fade"];
 const FLIGHTS = ["normal", "normal", "low", "high"];
 
 const CHIPS = ["Chip", "Pitch", "Bump-and-run"];
-const SHORT_LIES = ["Tight lie", "Fluffy lie", "In the rough", "Uphill lie", "Downhill lie", "Ball above your feet", "Ball below your feet"];
+// Lies around the green. The thick-rough ones also ask for a low or high shot (create an angle).
+const LIES1 = ["Tight lie, into the grain", "Ball sitting up in the rough, nothing behind it", "Up slope", "Down slope"];
+const LIES2 = ["Up slope", "Down slope", "Ball above your feet", "Ball below your feet", "Tight lie, into the grain", "Tight lie, muddy", "Tight lie, sandy",
+  "Ball sitting up in the rough, nothing behind it", "Thick rough between the club and ball", "Wet rough between the club and ball", "Into-the-grain rough between the club and ball"];
+const THICK = /between the club and ball/;
 const SAND_CLEAN = ["Clean flat lie", "Clean upslope", "Clean downslope"];
 const SAND_HARD = ["Fried egg", "Plugged"];
 
@@ -92,7 +96,7 @@ export function dealShot({ place, level, history = [], bag = null, rnd = Math.ra
       const types = L === 1 ? [...CHIPS, "Bunker shot"] : [...CHIPS, "High soft shot", "Bunker shot", "Bunker shot"];
       type = fresh(types, last?.type, rnd);
       const sand = type === "Bunker shot";
-      lie = sand ? pick(L === 1 ? SAND_CLEAN : [...SAND_CLEAN, ...SAND_HARD], rnd) : pick(L === 1 ? SHORT_LIES.slice(0, 3) : SHORT_LIES, rnd);
+      lie = sand ? pick(L === 1 ? SAND_CLEAN : [...SAND_CLEAN, ...SAND_HARD], rnd) : pick(L === 1 ? LIES1 : LIES2, rnd);
       steps = sand ? pick([6, 9, 12, 18], rnd) : (L === 1 ? 5 + Math.floor(rnd() * 16) : 4 + Math.floor(rnd() * 27));
     }
     const sand = type === "Bunker shot";
@@ -101,7 +105,8 @@ export function dealShot({ place, level, history = [], bag = null, rnd = Math.ra
     if (L >= 1 && !sand) { slope = pick(SLOPES, rnd); lines.push(slope); }
     if (L === 2) {
       pin = pick(EDGE_PINS, rnd); speed = pick(SPEEDS, rnd); lines.push(pin, speed);
-      if (type === "Chip" || type === "Pitch") { flight = pick(FLY_OR_RUN, rnd); lines.push(flight); }
+      if (THICK.test(lie)) { flight = pick(["Shot needed: low", "Shot needed: high"], rnd); lines.push(flight); }
+      else if (type === "Chip" || type === "Pitch") { flight = pick(FLY_OR_RUN, rnd); lines.push(flight); }
     }
     return { place, level: L, type, lie, steps, slope, speed, pin, flight, band: type, title: type, lines, routine: true };
   }
