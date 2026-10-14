@@ -349,6 +349,7 @@ export function start(root, { students, onSignOut }) {
         ${notes.map(n => `<p class="gap-note">${esc(n)}</p>`).join("")}</section>` : ""}
     </main>`;
   }
+  const bagHint = yds => { const c = clubsFor(myBag(), yds); return c.length ? "Your bag: " + c.map(x => `${x.club} ${x.carry}`).join(" · ") : ""; };
   const keepBag = () => draft.set(`${S.sid}.bagdraft`, S.bagDraft);
   async function readBagPhoto(file) {
     if (!file) return;
@@ -420,7 +421,7 @@ export function start(root, { students, onSignOut }) {
         ${h.par >= 4 ? sec("Tee shot", `<div class="pick">${b("tee.res", "fw", "Fairway", h.tee.res === "fw")}${b("tee.res", "L", "← Left", h.tee.res === "L")}${b("tee.res", "R", "Right →", h.tee.res === "R")}${full ? clubSel("tee.club", h.tee.club) : ""}</div>
           ${full && (h.tee.res === "L" || h.tee.res === "R") ? `<div class="pick lv-start">${b("tee.start", "curve", "Started on target, curved away", h.tee.start === "curve")}${b("tee.start", "off", "Started off target, stayed there", h.tee.start === "off")}</div>` : ""}`) : ""}
         ${full ? sec(h.par === 3 ? "Tee shot (into the green)" : "Shot into the green", `<div class="lv-row"><label>Distance <input class="lv-num" data-lvin="app.yds" inputmode="numeric" value="${esc(h.app.yds)}" placeholder="yds"></label>${clubSel("app.club", h.app.club)}</div>
-          ${clubsFor(myBag(), h.app.yds).length ? `<p class="bag-hint">Your bag: ${clubsFor(myBag(), h.app.yds).map(c => `${esc(c.club)} ${c.carry}`).join(" · ")}</p>` : ""}
+          <p class="bag-hint" id="bagHint">${esc(bagHint(h.app.yds))}</p>
           <div class="pick">${b("app", "G", "On the green", h.app.res.includes("G"), "good")}${[["S", "Short"], ["Lg", "Long"], ["L", "Left"], ["R", "Right"]].map(([v, l]) => b("app", v, l, h.app.res.includes(v))).join("")}</div>
           <p class="muted">Missed? Tap up to two, e.g. Short + Right.</p>`) : ""}
         ${full && missedGreen ? sec("Around the green", `<div class="pick">${b("sg.kind", "chip", "Chip / pitch", h.sg.kind === "chip")}${b("sg.kind", "bunker", "Bunker", h.sg.kind === "bunker")}</div>
@@ -770,8 +771,6 @@ export function start(root, { students, onSignOut }) {
   root.onchange = async e => {
     if (e.target.id === "bagPhoto") { readBagPhoto(e.target.files[0]); e.target.value = ""; return; }
     if (e.target.dataset?.bagon != null && S.bagDraft) { S.bagDraft[+e.target.dataset.bagon].on = e.target.checked; keepBag(); render(); return; }
-    if (e.target.dataset?.bag && S.bagDraft && e.target.dataset.bag.endsWith("carry")) { render(); return; }
-    if (e.target.dataset?.lvin === "app.yds" && S.live) { render(); return; }
     if (e.target.dataset?.lvsel && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvsel, e.target.value); saveLive(); return; }
     const id = e.target.dataset?.task;
     if (!id) return;
@@ -837,7 +836,11 @@ export function start(root, { students, onSignOut }) {
     const id = e.target.id || "";
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
     if (e.target.dataset?.bag && S.bagDraft) { const [i, k] = e.target.dataset.bag.split("."); S.bagDraft[+i][k] = k === "club" ? e.target.value : e.target.value.replace(/[^0-9]/g, ""); keepBag(); }
-    if (e.target.dataset?.lvin && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvin, e.target.value.replace(/[^0-9]/g, "")); saveLive(); }
+    if (e.target.dataset?.lvin && S.live) {
+      setPath(S.live.card[S.live.cur], e.target.dataset.lvin, e.target.value.replace(/[^0-9]/g, "")); saveLive();
+      // Update the club hint in place: re-rendering here would swallow the next tap.
+      if (e.target.dataset.lvin === "app.yds") { const hn = document.getElementById("bagHint"); if (hn) hn.textContent = bagHint(e.target.value); }
+    }
     if (id === "lv-notes" && S.live) { S.live.notes = e.target.value; saveLive(); }
     if (id === "g-tdate") { S.game.tdate = e.target.value; S.game.seed = 0; saveWeek(); render(); }
     if (id && e.target.matches(DRAFTABLE)) draft.set(`${S.sid}.${id}`, e.target.value);

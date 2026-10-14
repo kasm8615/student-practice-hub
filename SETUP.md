@@ -101,3 +101,7 @@ To switch on **✨ Tailor to me** (personal tips and targets written by Claude):
 ## Hole-by-hole round tracking
 
 Rounds → **Track a round hole by hole**. Quick mode: score, putts, fairway, penalties. Full mode adds tee-shot miss and start line (started on target and curved, or started off target), approach distance, club and miss direction, chip landing spot or bunker result, first-putt distance, penalty source and recovery shots. Progress is saved on the phone after every tap and can be resumed. On finish the app saves totals, the hole-by-hole card and the miss patterns (`src/lib/roundstats.js`), and the AI review uses them.
+
+## Club distances (update 3)
+
+Supabase SQL Editor → run `supabase/update-3.sql`. Students open Rounds → **My club distances** (or the menu). They can read distances from a photo (needs `ANTHROPIC_API_KEY`), estimate from their 7 iron, or type them. Karina sees the table and gap warnings on the student's Overview. The round tracker shows the closest clubs for the distance typed in.

@@ -241,3 +241,4 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .gap-row b{font-family:var(--mono);font-weight:500;text-align:right}
 .gap-note{margin:0;font-size:13px;background:var(--warn-soft);border-radius:10px;padding:8px 12px}
 .bag-hint{margin:0;font-size:13px;color:var(--pine);font-weight:600}
+.bag-hint:empty{display:none}
