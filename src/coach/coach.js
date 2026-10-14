@@ -5,7 +5,7 @@ import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
 import { patternLines } from "../lib/roundstats.js";
-import { carried, gapNotes, SWINGS } from "../lib/bag.js";
+import { carried, gapNotes, swingsFor } from "../lib/bag.js";
 import { trendHtml } from "../lib/trend.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, blockDate } from "../lib/util.js";
 
@@ -260,8 +260,8 @@ export function start(root, { onSignOut }) {
         return `<table class="card bag-t"><thead><tr><th>Club</th><th class="n">Carry</th><th class="n">Total</th><th class="n">Gap</th></tr></thead><tbody>${c.map((x, i) => `<tr><td>${esc(x.club)}</td><td class="n"><b>${x.carry}</b></td><td class="n">${esc(tot[x.club] || "")}</td><td class="n ${i && (c[i - 1].carry - x.carry >= 20 || c[i - 1].carry - x.carry <= 4) ? "gapflag" : ""}">${i ? c[i - 1].carry - x.carry : ""}</td></tr>`).join("")}</tbody></table>
           ${gapNotes(of("bag")[0].clubs).map(n => `<p style="font-size:12px;color:var(--warn);margin-top:4px">${esc(n.replace("; ask Karina about it", ""))}</p>`).join("")}`; })()}</div>
       ${of("bag")[0]?.wedges ? (() => { const w = of("bag")[0].wedges;
-        return `<div class="box"><h4>Wedge system (clock)</h4><div class="scroll"><table class="card bag-t"><thead><tr><th></th>${SWINGS.map(([, l]) => `<th class="n">${l}</th>`).join("")}</tr></thead>
-          <tbody>${(w.rows || []).map(r => `<tr><td><b>${esc(r.club)}</b></td>${SWINGS.map(([k]) => `<td class="n">${esc(r.d?.[k] || "–")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        return `<div class="box"><h4>Wedge system (${w.style === "pct" ? "percent of full" : "body marks"})</h4><div class="scroll"><table class="card bag-t"><thead><tr><th></th>${swingsFor(w.style).map(([, l]) => `<th class="n">${l}</th>`).join("")}</tr></thead>
+          <tbody>${(w.rows || []).map(r => `<tr><td><b>${esc(r.club)}</b></td>${swingsFor(w.style).map(([k]) => `<td class="n">${esc(r.d?.[k] || "–")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
 </div>`; })() : ""}
       <div class="box"><h4>Fitness flags</h4>${flags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${flags.map(f => `<span class="pill ${f.result === "Fail" ? "bad" : "warn"}">${esc(f.name)}</span>`).join("")}</div>` : '<p style="color:var(--ink-3)">No TPI flags logged.</p>'}
         ${s.coach_notes ? `<h4 style="margin-top:14px">Coach notes (private)</h4><p style="white-space:pre-wrap">${esc(s.coach_notes)}</p>` : ""}</div>

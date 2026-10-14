@@ -4,7 +4,7 @@ import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
 import { trendHtml } from "../lib/trend.js";
-import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor, SWINGS, newWedges, estimateWedges, wedgeFor } from "../lib/bag.js";
+import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor, SWINGS, SWING_STYLES, swingsFor, newWedges, estimateWedges, wedgeFor } from "../lib/bag.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
@@ -78,7 +78,7 @@ export function start(root, { students, onSignOut }) {
   const bagEntry = () => of("bag")[0] || null;
   const myBag = () => bagEntry()?.clubs || [];
   const myWedges = () => bagEntry()?.wedges || null;
-  const wedgeLines = () => (myWedges()?.rows || []).flatMap(r => SWINGS.filter(([k]) => +r.d?.[k] > 0).map(([k, l]) => `${r.club} ${l} swing ${r.d[k]}`));
+  const wedgeLines = () => (myWedges()?.rows || []).flatMap(r => swingsFor(myWedges()?.style).filter(([k]) => +r.d?.[k] > 0).map(([k, l]) => `${r.club} ${l} swing ${r.d[k]}`));
   const sessions = () => byDateDesc(of("session"));
   const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - todayIndex()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const targetScore = () => {
@@ -340,26 +340,32 @@ export function start(root, { students, onSignOut }) {
   function bagTabs() {
     return `<div class="pick seg">${[["bag", "Full bag"], ["wedges", "Wedge system"]].map(([k, l]) => `<button type="button" class="pick-btn" data-bagtab="${k}" aria-pressed="${(S.bagTab || "bag") === k}">${l}</button>`).join("")}</div>`;
   }
-  function clockSvg() {
-    const cx = 70, cy = 70, r = 54, pt = (h, rr) => { const a = h * Math.PI / 6; return [cx + rr * Math.sin(a), cy - rr * Math.cos(a)]; };
-    const hand = (h, cls, label) => { const [x, y] = pt(h, r - 6), [lx, ly] = pt(h, r + 12); return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="${cls}"/><text x="${lx}" y="${ly + 4}" text-anchor="middle" class="ck-l">${label}</text>`; };
-    return `<svg class="clock" viewBox="-16 0 172 150" role="img" aria-label="Clock positions for the lead arm: 7:30, 9:00 and 10:30">
-      <circle cx="${cx}" cy="${cy}" r="${r}" class="ck-face"/>
-      ${[12, 3, 6].map(h => { const [x, y] = pt(h, r - 12); return `<text x="${x}" y="${y + 4}" text-anchor="middle" class="ck-n">${h}</text>`; }).join("")}
-      ${hand(7.5, "ck-h1", "7:30")}${hand(9, "ck-h2", "9:00")}${hand(10.5, "ck-h3", "10:30")}
-      <circle cx="${cx}" cy="${cy}" r="4" class="ck-c"/><text x="${cx}" y="146" text-anchor="middle" class="ck-cap">Lead arm, seen from in front</text></svg>`;
+  // Picture for each way of naming swing lengths.
+  function swingArt(style) {
+    if (style === "pct") {
+      const bars = [["50%", 50, "var(--a2)"], ["75%", 75, "var(--pine)"], ["90%", 90, "var(--a3)"], ["Full", 100, "var(--ink-3)"]];
+      return `<svg class="swing-art" viewBox="0 0 140 120" role="img" aria-label="Backswing length as a percent of a full swing">
+        ${bars.map(([l, v, c], i) => `<text x="0" y="${22 + i * 28}" class="ck-l">${l}</text><rect x="34" y="${11 + i * 28}" width="100" height="14" rx="7" class="pct-bg"/><rect x="34" y="${11 + i * 28}" width="${v}" height="14" rx="7" fill="${c}"/>`).join("")}</svg>`;
+    }
+    const mark = (y, l, c) => `<line x1="34" x2="104" y1="${y}" y2="${y}" stroke="${c}" stroke-width="3" stroke-dasharray="5 4"/><circle cx="34" cy="${y}" r="5" fill="${c}"/><text x="108" y="${y + 4}" class="ck-l">${l}</text>`;
+    return `<svg class="swing-art" viewBox="0 0 168 150" role="img" aria-label="Hands stop at hip, chest or shoulder height">
+      <circle cx="70" cy="18" r="11" class="fig"/><line x1="70" y1="29" x2="70" y2="92" class="fig"/><line x1="70" y1="92" x2="56" y2="140" class="fig"/><line x1="70" y1="92" x2="84" y2="140" class="fig"/>
+      ${mark(44, "Shoulder", "var(--a3)")}${mark(62, "Chest", "var(--pine)")}${mark(88, "Hip", "var(--a2)")}</svg>`;
   }
   function wedgeScreen() {
     if (!S.wedgeDraft) S.wedgeDraft = draft.get(`${S.sid}.wedgedraft`) || (myWedges() ? JSON.parse(JSON.stringify(myWedges())) : newWedges(myBag()));
-    const w = S.wedgeDraft;
+    const w = S.wedgeDraft, style = w.style || "body", SW = swingsFor(style);
     return top("My bag", S.profile?.name || "") + `<main class="s-content">${bagTabs()}
-      <section class="card"><h2>The clock system</h2>
-        <div class="clock-wrap">${clockSvg()}<div><p class="muted" style="color:var(--ink-2)">Picture your lead arm as the hand of a clock. At address it points to 6. Stop your backswing with the arm at <b>7:30</b>, <b>9:00</b> or <b>10:30</b>, then swing through to the same length on the other side.</p>
+      <section class="card"><h2>How I measure my swing</h2>
+        <div class="pick seg">${SWING_STYLES.map(([k, l]) => `<button type="button" class="pick-btn" data-wstyle="${k}" aria-pressed="${style === k}">${l}</button>`).join("")}</div>
+        <div class="clock-wrap">${swingArt(style)}<div>${style === "pct"
+          ? `<p class="muted" style="color:var(--ink-2)">Make a smaller version of your full swing: <b>50%</b>, <b>75%</b> or <b>90%</b> of your full backswing, and finish the same amount on the other side.</p>`
+          : `<p class="muted" style="color:var(--ink-2)">Stop your backswing when your hands reach your <b>hip</b>, <b>chest</b> or <b>shoulder</b>, then swing through to the same height on the other side.</p>`}
           <p class="tempo"><b>Same tempo every time.</b> The length of the backswing changes the distance, not the speed. Count "one" back, "two" through.</p></div></div>
       </section>
       <form id="wedgeForm" class="card" novalidate><h2>Your wedge distances <span>carry, yards</span></h2>
-        <div class="scroll"><table class="wedge-t"><thead><tr><th></th>${SWINGS.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead>
-          <tbody>${w.rows.map((r, i) => `<tr><th>${esc(r.club)}</th>${SWINGS.map(([k, l]) => `<td><input class="lv-num" data-wd="${i}.${k}" inputmode="numeric" value="${esc(r.d[k] || "")}" placeholder="–" aria-label="${esc(r.club)} ${l} carry"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="scroll"><table class="wedge-t"><thead><tr><th></th>${SW.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead>
+          <tbody>${w.rows.map((r, i) => `<tr><th>${esc(r.club)}</th>${SW.map(([k, l]) => `<td><input class="lv-num" data-wd="${i}.${k}" inputmode="numeric" value="${esc(r.d[k] || "")}" placeholder="–" aria-label="${esc(r.club)} ${l} carry"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <div class="row2"><button type="button" class="btn" data-act="wedge-est">Estimate from full</button><button type="button" class="btn" data-act="wedge-row">+ Add wedge</button></div>
         <p class="muted">Fill "Full" for each wedge (or save your full bag first), then Estimate. Estimates are a starting point: hit 5 balls with each swing at the range and write what really carries.</p>
         <button class="btn primary" type="submit">Save my wedge system</button>
@@ -745,6 +751,7 @@ export function start(root, { students, onSignOut }) {
     const pw = t.closest("[data-pweek]"); if (pw) { S.planWeek = addDays(S.planWeek || weekStartOf(), +pw.dataset.pweek); render(); return; }
     const tr = t.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
     if (tr) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
+    const wst = t.closest("[data-wstyle]"); if (wst && S.wedgeDraft) { S.wedgeDraft.style = wst.dataset.wstyle; keepWedge(); render(); return; }
     const bt = t.closest("[data-bagtab]"); if (bt) { S.bagTab = bt.dataset.bagtab; render(); window.scrollTo(0, 0); return; }
     const gw = t.closest("[data-gweek]"); if (gw) { S.game.week = gw.dataset.gweek; S.game.seed = 0; S.game.pin = null; S.game.ai = null; saveWeek(); render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
@@ -873,7 +880,7 @@ export function start(root, { students, onSignOut }) {
     }
     if (e.target.id === "liveForm") { await liveSave(); return; }
     if (e.target.id === "wedgeForm") {
-      const wedges = { rows: S.wedgeDraft.rows };
+      const wedges = { style: S.wedgeDraft.style || "body", rows: S.wedgeDraft.rows };
       if (!wedges.rows.some(r => Object.values(r.d).some(v => +v > 0))) { toast("Add at least one distance first."); return; }
       const e0 = bagEntry();
       const ok = await run(() => e0 ? api.updateEntry(e0, { wedges }) : api.addEntry(S.sid, "bag", { clubs: [], wedges }), "Wedge system saved");

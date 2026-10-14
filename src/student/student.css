@@ -264,3 +264,6 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .setup-row{display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;font-size:12px;font-weight:600;color:var(--ink-3)}
 .setup-row .pick-btn{background:var(--surface)}
 .setup-row .pick-btn[aria-pressed="true"]{background:var(--pine)}
+.swing-art{width:130px;height:auto}
+.fig{stroke:var(--ink-2);stroke-width:4;stroke-linecap:round;fill:none}
+.pct-bg{fill:var(--surface-2);stroke:var(--line)}
