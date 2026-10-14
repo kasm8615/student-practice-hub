@@ -3,6 +3,7 @@ import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
+import { trendHtml } from "../lib/trend.js";
 import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor } from "../lib/bag.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
@@ -26,6 +27,7 @@ export function start(root, { students, onSignOut }) {
     students, sid: null, profile: null, entries: [], scores: [],
     screen: "home", sheet: null, logOpen: false, loading: true,
     practiceOpen: false, sess: { areas: [], rating: 0 }, goalDraft: {}, calc: null,
+    trend: { type: "all", n: 5, holes: "18", metric: "score" },
     game: { place: "range", minutes: 30, focus: "auto", seed: 0, ai: null, aiBusy: false, pin: null, week: "normal", tdate: "" }, aiAvailable: null, reviews: {}
   };
   try { const saved = localStorage.getItem("sph.student"); if (students.some(s => s.id === saved)) S.sid = saved; } catch {}
@@ -327,6 +329,7 @@ export function start(root, { students, onSignOut }) {
         <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
       ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
       <button class="bag-link" data-go="bag"><span><b>My club distances</b><small>${carried(myBag()).length ? `${carried(myBag()).length} clubs · updated ${esc(shortDate(bagEntry().updated_at))}` : "Add how far you hit each club"}</small></span><span class="chev">›</span></button>
+      ${r.length >= 2 ? `<section class="card"><h2>Your trend</h2>${trendHtml(r, S.trend)}</section>` : ""}
       <section class="card"><h2>Recent rounds</h2>${r.map(x => { const d = dateParts(x.date); return `<button class="round" data-round="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
         <span><span style="font-weight:600;display:block">${esc(x.course || x.event || "Round")}</span><span class="meta">${esc(x.event || "")} · ${esc(x.holes || "18")} holes${x.putts !== "" && x.putts != null ? ` · ${esc(x.putts)} putts` : ""}${x.fairways ? ` · FW ${esc(x.fairways)}` : ""}</span></span>
         <span class="sc">${esc(x.score)}</span></button>`; }).join("") || `<p class="muted">No rounds yet. Log your next one after you play.</p>`}</section></main>`;
@@ -702,6 +705,8 @@ export function start(root, { students, onSignOut }) {
       if (ls.dataset.lsholes) S.liveSetup.holes = ls.dataset.lsholes; else S.liveSetup.mode = ls.dataset.lsmode; render(); return; }
     const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; S.game.pin = null; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
     const pw = t.closest("[data-pweek]"); if (pw) { S.planWeek = addDays(S.planWeek || weekStartOf(), +pw.dataset.pweek); render(); return; }
+    const tr = t.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
+    if (tr) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
     const gw = t.closest("[data-gweek]"); if (gw) { S.game.week = gw.dataset.gweek; S.game.seed = 0; S.game.pin = null; S.game.ai = null; saveWeek(); render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
     const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }

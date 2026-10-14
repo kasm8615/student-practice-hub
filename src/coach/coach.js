@@ -6,6 +6,7 @@ import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
 import { patternLines } from "../lib/roundstats.js";
 import { carried, gapNotes } from "../lib/bag.js";
+import { trendHtml } from "../lib/trend.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, blockDate } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
@@ -82,6 +83,7 @@ const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - (d.getDa
 
 export function start(root, { onSignOut }) {
   const S = {
+    trend: { type: "all", n: 10, holes: "18", metric: "score" },
     students: [], sel: null, view: "checkin", tab: "overview", filter: "All", q: "", showArchived: false,
     entries: [], scores: [], seen: {}, week: { plans: [], notes: [], scores: [], drills: [], sessions: [] }, invite: null
   };
@@ -321,7 +323,7 @@ export function start(root, { onSignOut }) {
         <div class="kpi"><div class="l">Avg GIR</div><div class="v">${avg("gir")}</div></div>
         <div class="kpi"><div class="l">Avg putts</div><div class="v">${avg("putts")}</div></div>
         <div class="kpi"><div class="l">Rounds</div><div class="v">${r.length}</div></div></div>
-        <div class="box">${chart(r)}</div>
+        <div class="box trend-box"><h4>Trend</h4>${trendHtml(r, S.trend)}</div>
         <div class="scroll"><table class="card"><thead><tr><th>Date</th><th>Course</th><th>Type</th><th class="n">Holes</th><th class="n">Score</th><th class="n">FW</th><th class="n">GIR</th><th class="n">Putts</th><th class="n">U&amp;D</th><th class="n">Pen</th></tr></thead>
         <tbody>${r.map(e => `<tr class="row" data-edit="${esc(e.id)}" tabindex="0"><td>${esc(fmtDate(e.date))}${e.author === "student" ? " ·&nbsp;S" : ""}${e.card ? " ⛳" : ""}${e.review ? " ✨" : ""}</td><td>${esc(e.course)}</td><td>${esc(e.event)}</td><td class="n">${esc(e.holes || "18")}</td><td class="n"><b>${esc(e.score)}</b></td><td class="n">${esc(e.fairways)}</td><td class="n">${esc(e.gir)}</td><td class="n">${esc(e.putts)}</td><td class="n">${esc(e.updown)}</td><td class="n">${esc(e.penalties)}</td></tr>`).join("")}</tbody></table></div>
         <p style="font-size:12px;color:var(--ink-3);margin:0">S = logged by the student. ⛳ = logged hole by hole. ✨ = has an AI round review.</p>
@@ -570,6 +572,8 @@ export function start(root, { onSignOut }) {
   }
 
   root.onclick = async ev => {
+    const tr = ev.target.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
+    if (tr && !tr.closest("#modalRoot")) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
     const t = ev.target.closest("[data-sid],[data-tab],[data-act],[data-edit],[data-filter],[data-view],[data-remind],[data-delnote],[data-cweek]");
     if (!t || t.closest("#modalRoot")) return;
     if (t.dataset.sid) { S.tab = "overview"; await openStudent(t.dataset.sid); return; }

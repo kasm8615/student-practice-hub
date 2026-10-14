@@ -96,3 +96,31 @@ a{color:var(--pine)}
 .bench td.n b{color:var(--pine);font-weight:600}
 .bench-tip{margin:10px 0 0;font-size:14px;background:var(--pine-soft);border-radius:10px;padding:10px 12px}
 .bench-src{margin:8px 0 0;font-size:11px;color:var(--ink-3)}
+/* round trend chart (student Rounds and coach Stats) */
+.trend-box .pick,.tr-pick{display:flex;flex-wrap:wrap;gap:6px}
+.trend-box .pick-btn{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.trend-box .pick-btn[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:var(--pine-ink)}
+.tr-controls{display:flex;flex-direction:column;gap:8px}
+.tr-row{display:flex;gap:12px;flex-wrap:wrap}
+.tr-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-top:10px}
+.tr-sum div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 4px}
+.tr-sum b{display:block;font-family:var(--display);font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.tr-sum small{font-size:11px;color:var(--ink-3)}
+.tr-sum .up b{color:var(--good)}
+.tr-sum .down b{color:var(--bad)}
+.tr-chart{width:100%;height:auto;display:block;margin-top:6px;max-width:640px}
+.tr-grid{stroke:var(--line);stroke-width:1}
+.tr-avg{stroke:var(--flag);stroke-width:1.5;stroke-dasharray:4 4}
+.tr-line{fill:none;stroke:var(--pine);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.tr-dot{fill:var(--pine);stroke:var(--surface);stroke-width:1.5}
+.tr-dot.t{fill:var(--flag);stroke:var(--pine);stroke-width:2}
+.tr-dot.last{stroke-width:2.5}
+.tr-val{font-size:11px;font-weight:700;fill:var(--ink);font-family:var(--mono)}
+.tr-ax{font-size:10px;fill:var(--ink-3)}
+.tr-key{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);margin:4px 0 0}
+.tr-key span[class^="k-"]{display:inline-block;width:14px}
+.tr-key .k-line{border-top:2.5px solid var(--pine)}
+.tr-key .k-avg{border-top:2px dashed var(--flag);margin-left:8px}
+.tr-key .k-t{width:10px!important;height:10px;border-radius:50%;background:var(--flag);border:2px solid var(--pine);margin-left:8px}
+.tr-empty{margin-top:10px}
+.trend-box .tr-sum,.trend-box .tr-chart,.trend-box .tr-key{max-width:560px}
