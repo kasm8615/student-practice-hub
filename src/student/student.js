@@ -6,7 +6,7 @@ import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchm
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
-import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
+import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, dayNum, blockDate } from "../lib/util.js";
 
 const ICON = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>',
@@ -53,9 +53,10 @@ export function start(root, { students, onSignOut }) {
   const drillById = id => S.entries.find(e => e.id === id && e.type === "drill");
   const scoresFor = id => S.scores.filter(s => s.drill_id === id).sort((a, b) => (a.scored_on + a.created_at).localeCompare(b.scored_on + b.created_at));
   const lastScore = id => { const a = scoresFor(id); return a[a.length - 1] || null; };
-  const plan = () => of("plan").slice().sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day));
-  const mins = () => {
-    const p = of("plan");
+  // Practice blocks for one calendar week (Monday start), in date order.
+  const plan = (ws = weekStartOf()) => of("plan").filter(x => weekStartOf(blockDate(x)) === ws).sort((a, b) => blockDate(a).localeCompare(blockDate(b)));
+  const mins = (ws = weekStartOf()) => {
+    const p = plan(ws);
     const planned = p.reduce((a, x) => a + (+x.minutes || 0), 0);
     const done = p.filter(x => x.done).reduce((a, x) => a + (+x.minutes || 0), 0);
     return { planned, done, pct: planned ? Math.round(done / planned * 100) : 0 };
@@ -120,8 +121,8 @@ export function start(root, { students, onSignOut }) {
 
   // ---------- screens
   function home() {
-    const m = mins(), ti = todayIndex(), p = plan();
-    const todays = p.filter(x => x.day === DAYS[ti]);
+    const m = mins(), p = plan(), td = today();
+    const todays = p.filter(x => blockDate(x) === td);
     const lesson = byDateDesc(of("lesson")).find(l => l.homework);
     const rounds = of("stat").filter(r => String(r.holes || "18") === "18" && r.score !== "" && r.score != null);
     const recent = byDateDesc(rounds).slice(0, 3);
@@ -129,10 +130,10 @@ export function start(root, { students, onSignOut }) {
     const dateLine = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
     return top(`Hi, ${firstName()}`, dateLine) + `<main class="s-content">
       <section class="thought"><span>Today's thought</span><p>${esc(quoteOfTheDay())}</p></section>
-      <section class="card week-card"><h2>This week's practice</h2>
+      <section class="card week-card"><h2>This week's practice <span>${esc(weekLabel(weekStartOf()))}</span></h2>
         <div class="big-n">${m.done}<small> / ${m.planned} min</small></div>
         <div class="bar"><i style="width:${m.pct}%"></i></div>
-        <div class="dots">${DAYS.map((d, i) => { const b = p.filter(x => x.day === d); const on = b.length && b.every(x => x.done); return `<div class="${on ? "on" : ""} ${i === ti ? "today" : ""} ${b.length ? "" : "rest"}"><b>${on ? "✓" : ""}</b>${d}</div>`; }).join("")}</div>
+        <div class="dots">${weekDates(weekStartOf()).map(dt => { const b = p.filter(x => blockDate(x) === dt); const on = b.length && b.every(x => x.done); return `<div class="${on ? "on" : ""} ${dt === td ? "today" : ""} ${b.length ? "" : "rest"}"><b>${on ? "✓" : dayNum(dt)}</b>${dayName(dt)}</div>`; }).join("")}</div>
       </section>
       <section class="card"><h2>Today <span>${todays.reduce((a, x) => a + (+x.minutes || 0), 0) || ""}${todays.length ? " min" : ""}</span></h2>
         ${todays.map(task).join("") || `<p class="muted">Nothing planned today. Rest, or get ahead on tomorrow.</p>`}</section>
@@ -150,13 +151,16 @@ export function start(root, { students, onSignOut }) {
     </main>`;
   }
   function planScreen() {
-    const m = mins(), p = plan(), ti = todayIndex();
-    const planPart = !p.length ? `<div class="card"><p class="muted">Karina hasn't set this week's plan yet. You can still log what you practice below.</p></div>` : `
+    const ws = S.planWeek || weekStartOf(), cur = ws === weekStartOf(), td = today();
+    const m = mins(ws), p = plan(ws);
+    const rel = cur ? "This week" : ws === addDays(weekStartOf(), 7) ? "Next week" : ws === addDays(weekStartOf(), -7) ? "Last week" : "";
+    const weekNav = `<div class="week-nav"><button class="btn" data-pweek="-7" aria-label="Previous week">‹</button><div><b>${esc(weekLabel(ws))}</b>${rel ? `<small>${rel}</small>` : ""}</div><button class="btn" data-pweek="7" aria-label="Next week">›</button></div>`;
+    const planPart = weekNav + (!p.length ? `<div class="card"><p class="muted">${cur ? "Karina hasn't set this week's plan yet. You can still log what you practice below." : "No plan for this week."}</p></div>` : `
       <section class="card"><h2>Progress <span>${m.done} of ${m.planned} min · ${m.pct}%</span></h2><div class="bar plain"><i style="width:${m.pct}%"></i></div></section>
       <section class="card"><h2>What you're working on</h2>${focusBar(p, x => x.minutes, x => x.area)}</section>
-      ${DAYS.map((d, i) => { const b = p.filter(x => x.day === d); if (!b.length) return ""; return `<section class="card"><h2>${d}${i === ti ? " · today" : ""} <span>${b.reduce((a, x) => a + (+x.minutes || 0), 0)} min</span></h2>${b.map(task).join("")}</section>`; }).join("")}
-      <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p>`;
-    return top("This week", S.profile?.name || "") + `<main class="s-content">
+      ${weekDates(ws).map(dt => { const b = p.filter(x => blockDate(x) === dt); if (!b.length) return ""; return `<section class="card ${dt === td ? "is-today" : ""}"><h2>${dayName(dt)}, ${esc(shortDate(dt))}${dt === td ? " · today" : ""} <span>${b.reduce((a, x) => a + (+x.minutes || 0), 0)} min</span></h2>${b.map(task).join("")}</section>`; }).join("")}
+      <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p>`);
+    return top("Practice plan", S.profile?.name || "") + `<main class="s-content">
       <button class="games-cta" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game. Tap to get a session.</span></button>
       ${planPart}${practiceLog()}</main>`;
   }
@@ -522,7 +526,7 @@ export function start(root, { students, onSignOut }) {
       ${dr ? videoThumb(dr.video_pid, "Karina's demo") + demoLink(dr.video, "Watch Karina's demo") : demoLink(p.video, "Watch the demo")}
       ${dr && dr.goal ? `<div class="target"><b>${esc(dr.goal)}/${esc(dr.of || 10)}</b><span>Target${dr.target ? ": " + esc(dr.target) : ""}</span></div>
         <div><h3 style="margin:0 0 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)">Your scores</h3>${hist(dr)}</div>`
-        : `<div class="target"><b>${esc(p.minutes || "–")}</b><span>minutes · ${esc(p.day || "")}</span></div>`}
+        : `<div class="target"><b>${esc(p.minutes || "–")}</b><span>minutes · ${esc(dayName(blockDate(p)) + ", " + shortDate(blockDate(p)))}</span></div>`}
       ${p.done ? `<button class="btn" data-act="undo-done">Mark not done</button><button class="btn" data-close="1">Close</button>`
         : `<button class="btn primary" data-act="${dr && dr.goal ? "to-score" : "mark-done"}">${dr && dr.goal ? "Log my score" : "Mark done"}</button>`}`);
   }
@@ -553,7 +557,7 @@ export function start(root, { students, onSignOut }) {
   }
   function openPractice() {
     // Start with the parts of the game from today's plan blocks.
-    const todays = plan().filter(x => x.day === DAYS[todayIndex()]);
+    const todays = plan().filter(x => blockDate(x) === today());
     S.sess = { areas: [...new Set(todays.map(x => x.area).filter(a => AREA_NAMES.includes(a)))], rating: 0 };
     S.screen = "plan"; S.practiceOpen = true; S.logOpen = false; S.sheet = null; render();
     const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
@@ -585,7 +589,7 @@ export function start(root, { students, onSignOut }) {
     } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't tailor right now. The games still work as they are."); }
     S.game.aiBusy = false; render();
   }
-  function go(screen) { S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
+  function go(screen) { if (screen === "plan" && S.screen !== "plan") S.planWeek = null; S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
   function openScore(entryId, drillId) {
     const p = S.entries.find(e => e.id === entryId);
     const dr = drillById(drillId || p?.drill);
@@ -614,6 +618,7 @@ export function start(root, { students, onSignOut }) {
     if (ls && S.liveSetup) { S.liveSetup.course = root.querySelector("#lv-course")?.value || ""; S.liveSetup.date = root.querySelector("#lv-date")?.value || today(); S.liveSetup.event = root.querySelector("#lv-event")?.value || "Casual";
       if (ls.dataset.lsholes) S.liveSetup.holes = ls.dataset.lsholes; else S.liveSetup.mode = ls.dataset.lsmode; render(); return; }
     const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; S.game.pin = null; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
+    const pw = t.closest("[data-pweek]"); if (pw) { S.planWeek = addDays(S.planWeek || weekStartOf(), +pw.dataset.pweek); render(); return; }
     const gw = t.closest("[data-gweek]"); if (gw) { S.game.week = gw.dataset.gweek; S.game.seed = 0; S.game.pin = null; S.game.ai = null; saveWeek(); render(); return; }
     const gm = t.closest("[data-gmin]"); if (gm) { S.game.minutes = +gm.dataset.gmin; S.game.seed = 0; render(); return; }
     const gf = t.closest("[data-gfocus]"); if (gf) { S.game.focus = gf.dataset.gfocus; S.game.seed = 0; S.game.pin = null; render(); return; }

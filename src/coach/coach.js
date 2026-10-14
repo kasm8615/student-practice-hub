@@ -5,7 +5,7 @@ import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
 import { patternLines } from "../lib/roundstats.js";
-import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft } from "../lib/util.js";
+import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, blockDate } from "../lib/util.js";
 
 const STUDENT_FIELDS = [
   { k: "name", t: "text", l: "Full name", req: true, full: true },
@@ -54,8 +54,8 @@ const TYPES = {
     { k: "penalties", t: "number", l: "Penalty strokes" },
     { k: "notes", t: "textarea", l: "Notes", full: true }
   ] },
-  plan: { tab: "Practice Plan", one: "Practice block", sub: "This week's plan. Students tick blocks off; drill blocks ask them for a score.", fields: [
-    { k: "day", t: "select", l: "Day", opts: DAYS, req: true },
+  plan: { tab: "Practice Plan", one: "Practice block", sub: "Plan by calendar week. Students tick blocks off; drill blocks ask them for a score.", fields: [
+    { k: "date", t: "date", l: "Date", req: true },
     { k: "minutes", t: "number", l: "Minutes" },
     { k: "area", t: "select", l: "Part of the game", opts: AREA_NAMES },
     { k: "drill", t: "drill", l: "Linked drill (asks for a score)" },
@@ -146,7 +146,7 @@ export function start(root, { onSignOut }) {
     const active = S.students.filter(s => !s.archived);
     const since = Date.now() - 7 * 864e5;
     const rows = active.map(s => {
-      const plans = S.week.plans.filter(p => p.student_id === s.id);
+      const plans = S.week.plans.filter(p => p.student_id === s.id && weekStartOf(blockDate(p)) === weekStartOf());
       const planned = plans.reduce((a, p) => a + (+p.minutes || 0), 0);
       const done = plans.filter(p => p.done).reduce((a, p) => a + (+p.minutes || 0), 0);
       const pct = planned ? Math.round(done / planned * 100) : null;
@@ -184,9 +184,9 @@ export function start(root, { onSignOut }) {
     </section>`;
   }
   function reminderText(s) {
-    const plans = S.week.plans.filter(p => p.student_id === s.id && !p.done).sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day));
+    const plans = S.week.plans.filter(p => p.student_id === s.id && !p.done && blockDate(p) >= today() && weekStartOf(blockDate(p)) === weekStartOf()).sort((a, b) => blockDate(a).localeCompare(blockDate(b)));
     const first = String(s.name).split(/\s+/)[0];
-    const lines = plans.slice(0, 5).map(p => `• ${p.day}: ${p.title}${p.minutes ? ` (${p.minutes} min)` : ""}`).join("\n");
+    const lines = plans.slice(0, 5).map(p => `• ${dayName(blockDate(p))} ${shortDate(blockDate(p))}: ${p.title}${p.minutes ? ` (${p.minutes} min)` : ""}`).join("\n");
     return `Hi ${first}! Quick nudge from Karina. Here's what's left on your practice plan this week:\n${lines || "• Check the app for this week's plan"}\n\nTick things off in Golfers Practice Hub as you go so I can see how it's going before our next lesson.`;
   }
 
@@ -322,17 +322,23 @@ export function start(root, { onSignOut }) {
         ${r.filter(e => e.review).slice(0, 3).map(e => `<div class="box rv-box" data-edit="${esc(e.id)}" role="button" tabindex="0"><h4>✨ ${esc(fmtDate(e.date))} · ${esc(e.score)}${e.course ? " at " + esc(e.course) : ""}</h4>${reviewBody(e.review)}</div>`).join("")}` : empty(t));
     }
     if (t === "plan") {
-      const planned = rows.reduce((a, p) => a + (+p.minutes || 0), 0), done = rows.filter(p => p.done).reduce((a, p) => a + (+p.minutes || 0), 0);
-      const extra = rows.some(r => r.done) ? `<button class="btn small" data-act="reset-week">Start new week</button>` : "";
+      const ws = S.planWeek || weekStartOf(), cur = ws === weekStartOf(), td = today();
+      const wk = rows.filter(r => weekStartOf(blockDate(r)) === ws);
+      const planned = wk.reduce((a, p) => a + (+p.minutes || 0), 0), done = wk.filter(p => p.done).reduce((a, p) => a + (+p.minutes || 0), 0);
+      const nextHas = rows.some(r => weekStartOf(blockDate(r)) === addDays(ws, 7));
+      const extra = wk.length ? `<button class="btn small" data-act="copy-week" ${nextHas ? 'title="Next week already has blocks; these will be added"' : ""}>Copy to next week</button>` : "";
       const drills = Object.fromEntries(of("drill").map(d => [d.id, d]));
-      return head(t, extra) + `<div class="box" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${done} of ${planned} minutes done</b><span class="hcp">${planned ? Math.round(done / planned * 100) : 0}%</span></div><div class="progress"><i style="width:${planned ? done / planned * 100 : 0}%"></i></div></div>
-        ${rows.length ? `<div class="box" style="display:flex;flex-direction:column;gap:8px"><h4 style="margin:0">Focus this week</h4>${focusBar(rows, p => p.minutes, p => p.area)}</div>` : ""}
-        <div class="week">${DAYS.map(d => { const b = rows.filter(r => r.day === d); const m = b.reduce((a, p) => a + (+p.minutes || 0), 0);
-          return `<div class="day"><h5>${d}<span>${m ? m + " min" : ""}</span></h5>${b.map(e => { const dr = e.drill && drills[e.drill]; const sc = dr ? scoresFor(dr.id) : []; const ls = sc[sc.length - 1];
+      const rel = cur ? "This week" : ws === addDays(weekStartOf(), 7) ? "Next week" : ws === addDays(weekStartOf(), -7) ? "Last week" : "";
+      return head(t, extra) + `<div class="week-nav"><button class="btn small" data-cweek="-7" aria-label="Previous week">‹</button><div><b>${esc(weekLabel(ws))}</b>${rel ? ` <span class="pill neutral">${rel}</span>` : ""}</div><button class="btn small" data-cweek="7" aria-label="Next week">›</button>${cur ? "" : `<button class="btn small ghost" data-cweek="0">Today</button>`}</div>
+        <div class="box" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${done} of ${planned} minutes done</b><span class="hcp">${planned ? Math.round(done / planned * 100) : 0}%</span></div><div class="progress"><i style="width:${planned ? done / planned * 100 : 0}%"></i></div></div>
+        ${wk.length ? `<div class="box" style="display:flex;flex-direction:column;gap:8px"><h4 style="margin:0">Focus this week</h4>${focusBar(wk, p => p.minutes, p => p.area)}</div>` : ""}
+        <div class="week">${weekDates(ws).map(dt => { const b = wk.filter(r => blockDate(r) === dt); const m = b.reduce((a, p) => a + (+p.minutes || 0), 0);
+          return `<div class="day ${dt === td ? "is-today" : ""}"><h5><b class="dd">${dayName(dt)}<small>${esc(shortDate(dt))}</small></b><span>${m ? m + " min" : ""}</span></h5>${b.map(e => { const dr = e.drill && drills[e.drill]; const sc = dr ? scoresFor(dr.id) : []; const ls = sc[sc.length - 1];
             return `<div class="block ${e.done ? "done" : ""}">
             <input type="checkbox" id="chk-${esc(e.id)}" data-toggle="${esc(e.id)}" ${e.done ? "checked" : ""} aria-label="Mark ${esc(e.title)} done">
             <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${areaChip(e.area)}<div class="bt" data-edit="${esc(e.id)}">${esc(e.title)}</div><div class="bd">${e.minutes ? esc(e.minutes) + " min" : ""}${e.details ? " · " + esc(e.details) : ""}</div>
-            ${dr ? `<div class="bd" style="color:var(--pine)">${ls ? `Score ${ls.score}/${ls.out_of}` : "Drill"} · target ${esc(dr.goal || "–")}</div>` : ""}</div></div>`; }).join("") || '<span style="font-size:12px;color:var(--ink-3)">Rest</span>'}</div>`; }).join("")}</div>`;
+            ${dr ? `<div class="bd" style="color:var(--pine)">${ls ? `Score ${ls.score}/${ls.out_of}` : "Drill"} · target ${esc(dr.goal || "–")}</div>` : ""}</div></div>`; }).join("")}
+            <button class="add-day" data-act="add-on" data-date="${dt}" aria-label="Add a block on ${dayName(dt)} ${esc(shortDate(dt))}">+ Add</button></div>`; }).join("")}</div>`;
     }
     if (t === "fitness") {
       const r = sortDateDesc(rows);
@@ -502,12 +508,15 @@ export function start(root, { onSignOut }) {
       onDelete: s ? async () => { const ok = await write(api.deleteStudent(s.id), "Student deleted"); if (ok) { S.sel = null; S.view = "checkin"; await refresh(); } return ok; } : null
     });
   }
-  function entryForm(type, e) {
+  function entryForm(type, e, presetDate) {
+    if (e && type === "plan" && !e.date) e = { ...e, date: blockDate(e) };
     const T = TYPES[type];
-    const defaults = type === "plan" ? { day: DAYS[(new Date().getDay() + 6) % 7] } : type === "drill" ? { status: "Assigned", of: 10 } : null;
+    const ws = S.planWeek || weekStartOf();
+    const defaults = type === "plan" ? { date: presetDate || (ws === weekStartOf() ? today() : ws) } : type === "drill" ? { status: "Assigned", of: 10 } : null;
     openForm({
       title: (e ? "Edit " : "New ") + T.one.toLowerCase(), prefix: type, fields: T.fields, data: e || defaults, key: `${type}-${e ? e.id : "new-" + S.sel}`,
       onSave: async d => {
+        if (type === "plan" && d.date) d.day = dayName(d.date);
         if (type === "plan" && d.drill && !d.area) { const dr = of("drill").find(x => x.id === d.drill); if (dr) d.area = dr.category; }
         return !!(e ? await write(api.updateEntry(e, d), "Saved") : await write(api.addEntry(S.sel, type, d), T.one + " added"));
       },
@@ -536,7 +545,7 @@ export function start(root, { onSignOut }) {
     if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } }
   }
   async function openStudent(id) {
-    S.sel = id; S.view = "student"; S.entries = []; S.scores = []; S.invite = S.invite === id ? id : null;
+    S.sel = id; S.view = "student"; S.entries = []; S.scores = []; S.planWeek = null; S.invite = S.invite === id ? id : null;
     if (stopWatch) stopWatch();
     stopWatch = api.watch([id], soon);
     try { await loadStudent(); } catch (err) { toast(friendly(err)); }
@@ -555,12 +564,13 @@ export function start(root, { onSignOut }) {
   }
 
   root.onclick = async ev => {
-    const t = ev.target.closest("[data-sid],[data-tab],[data-act],[data-edit],[data-filter],[data-view],[data-remind],[data-delnote]");
+    const t = ev.target.closest("[data-sid],[data-tab],[data-act],[data-edit],[data-filter],[data-view],[data-remind],[data-delnote],[data-cweek]");
     if (!t || t.closest("#modalRoot")) return;
     if (t.dataset.sid) { S.tab = "overview"; await openStudent(t.dataset.sid); return; }
     if (t.dataset.view) { await openCheckin(); return; }
     if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
-    if (t.dataset.tab) { S.tab = t.dataset.tab; render(); return; }
+    if (t.dataset.tab) { S.tab = t.dataset.tab; S.planWeek = null; render(); return; }
+    if (t.dataset.cweek != null) { S.planWeek = +t.dataset.cweek === 0 ? null : addDays(S.planWeek || weekStartOf(), +t.dataset.cweek); render(); return; }
     if (t.dataset.remind) { const s = S.students.find(x => x.id === t.dataset.remind); if (s) await copy(reminderText(s)); return; }
     if (t.dataset.delnote) { await write(api.deleteEntry(t.dataset.delnote), "Note deleted"); return; }
     const a = t.dataset.act;
@@ -573,8 +583,15 @@ export function start(root, { onSignOut }) {
     if (a === "toggle-archived") { S.showArchived = !S.showArchived; render(); return; }
     if (a === "signout") { if (stopWatch) stopWatch(); await api.signOut(); root.onclick = root.onchange = root.onsubmit = root.oninput = root.onkeydown = null; onSignOut(); return; }
     if (a === "add") return entryForm(t.dataset.type);
-    if (a === "reset-week") {
-      try { for (const r of of("plan").filter(r => r.done)) await api.setPlanDone(r.id, false); toast("New week started"); } catch (err) { toast(friendly(err)); }
+    if (a === "add-on") return entryForm("plan", null, t.dataset.date);
+    if (a === "copy-week") {
+      const ws = S.planWeek || weekStartOf();
+      const wk = of("plan").filter(r => weekStartOf(blockDate(r)) === ws);
+      t.disabled = true;
+      try {
+        for (const r of wk) { const nd = addDays(blockDate(r), 7); const { id, type, student_id, author, created_by, created_at, updated_at, done, done_at, ...rest } = r; await api.addEntry(S.sel, "plan", { ...rest, date: nd, day: dayName(nd), done: false }); }
+        S.planWeek = addDays(ws, 7); toast(`Copied ${wk.length} block${wk.length > 1 ? "s" : ""} to ${weekLabel(S.planWeek)}`);
+      } catch (err) { toast(friendly(err)); }
       await refresh(); return;
     }
     if (t.dataset.edit) { const e = S.entries.find(x => x.id === t.dataset.edit); if (e) entryForm(e.type, e); }

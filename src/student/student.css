@@ -216,3 +216,9 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .sc-score td.o2{color:var(--bad)}
 .scroll{overflow-x:auto;max-width:100%}
 .week-tip{margin:0;font-size:14px;background:var(--flag-soft);border-radius:10px;padding:8px 12px}
+.week-nav{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;text-align:center}
+.week-nav .btn{width:44px;padding:10px 0;font-size:20px;line-height:1}
+.week-nav b{display:block;font-family:var(--display);font-size:20px}
+.week-nav small{font-size:12px;color:var(--ink-3)}
+.card.is-today{border:2px solid var(--pine)}
+.week-card h2 span{color:var(--hero-ink)}

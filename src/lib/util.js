@@ -88,3 +88,20 @@ export const draft = {
   set(key, val) { try { localStorage.setItem("sph.draft." + key, JSON.stringify(val)); } catch {} },
   clear(key) { try { localStorage.removeItem("sph.draft." + key); } catch {} }
 };
+
+// ---- Calendar weeks (Monday to Sunday), as YYYY-MM-DD strings in local time
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parse = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d, 12); };
+export const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); };
+export const weekStartOf = (s = today()) => { const d = parse(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return ymd(d); };
+export const weekDates = start => Array.from({ length: 7 }, (_, i) => addDays(start, i));
+export function weekLabel(start) {
+  const a = parse(start), b = parse(addDays(start, 6));
+  return a.getMonth() === b.getMonth()
+    ? `${MONTHS[a.getMonth()]} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}`
+    : `${MONTHS[a.getMonth()]} ${a.getDate()} – ${MONTHS[b.getMonth()]} ${b.getDate()}, ${b.getFullYear()}`;
+}
+export const dayName = s => DAYS[(parse(s).getDay() + 6) % 7];
+export const dayNum = s => parse(s).getDate();
+// A practice block's date. Older blocks only have a weekday: they belong to the current week.
+export const blockDate = p => p.date || (p.day && DAYS.includes(p.day) ? addDays(weekStartOf(), DAYS.indexOf(p.day)) : weekStartOf());

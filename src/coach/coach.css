@@ -188,3 +188,13 @@ a{color:var(--pine)}
 .rv-box h4{margin:0 0 6px}
 .rv-box ul{margin:2px 0 0;padding-left:18px}
 .holes-t{font-size:12px}.holes-t td,.holes-t th{white-space:nowrap}
+.week-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.week-nav b{font-size:18px}
+.week .day h5{align-items:flex-start}
+.week .day h5 .dd{display:flex;flex-direction:column;line-height:1.1;font-weight:600}
+.week .day h5 .dd small{font-family:var(--body,inherit);font-size:12px;font-weight:500;color:var(--ink-3)}
+.block{min-width:0;position:relative}.block>div{min-width:0;overflow-wrap:break-word}
+.week .block{grid-template-columns:1fr;padding-top:30px}.week .block>input{position:absolute;top:8px;left:8px}
+.block .area{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.week .day.is-today{outline:2px solid var(--pine);outline-offset:-1px}
+.add-day{border:1px dashed var(--line);background:none;border-radius:8px;padding:6px;font-size:12px;font-weight:600;color:var(--pine);width:100%;margin-top:auto}
