@@ -52,6 +52,36 @@ Rules:
 - mental: one short sentence on mindset, based on their notes (or omit with "").
 Reply with JSON only: {"headline":"...","good":["..."],"cost":["..."],"focus":"...","game_id":"...","mental":"..."}`;
 
+const SHOT_SYSTEM = `You write one specific, realistic on-course scenario for a golf practice shot inside Karina Sánchez's coaching app. Karina is a TPI-certified golf coach.
+You get the shot the student must hit (place, club or shot type, distance, lie, wind, trajectory) plus their level, weak spots and goals.
+Rules:
+- Keep the shot exactly as given: same club or shot type, distance, lie, wind and trajectory. Wrap a real situation around it: the hole, what is around the target, where the trouble is, and the score situation.
+- Do NOT say how to hit it. No swing or technique advice, no club or aim suggestions, no stance or setup tips. Karina teaches that.
+- If the student has a weak spot, make the scenario test it without naming it.
+- Plain words a 12-year-old understands. One to three short sentences, 45 words at most.
+- Never mention injuries, medical advice or equipment purchases.
+Reply with JSON only: {"scenario":"..."}`;
+
+async function shot(p, env) {
+  const s = p.shot || {};
+  if (!clip(s.title, 60)) return json({ error: "No shot to build a scenario for." }, 400);
+  const pl = p.player || {};
+  const user = JSON.stringify({
+    place: clip(p.place, 20), level: clip(p.level, 20),
+    shot: { title: clip(s.title, 60), details: (Array.isArray(s.lines) ? s.lines : []).slice(0, 10).map(x => clip(x, 120)) },
+    weak_spots: (Array.isArray(p.weak) ? p.weak : []).slice(0, 3).map(w => ({ band: clip(w.band, 40), shots: +w.n || 0, best_results: +w.best || 0 })),
+    player: {
+      handicap: clip(pl.handicap, 10), group: clip(pl.group, 10),
+      goals: Object.fromEntries(Object.entries(pl.goals || {}).slice(0, 4).map(([k, v]) => [clip(k, 10), clip(v, 200)])),
+      club_carries: (Array.isArray(pl.club_carries) ? pl.club_carries : []).slice(0, 40).map(c => clip(c, 30))
+    }
+  });
+  const out = await claude(env, SHOT_SYSTEM, user, 300);
+  const scenario = clip(out?.scenario, 320).trim();
+  if (!scenario) return json({ error: "Couldn't build a scenario right now. The shot still works as it is." }, 502);
+  return json({ scenario });
+}
+
 async function claude(env, system, user, max = 700) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -117,6 +147,7 @@ export async function onRequestPost({ request, env }) {
   try { p = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
   if (p.kind === "review") return review(p, env);
   if (p.kind === "bag-photo") return bagPhoto(p, env);
+  if (p.kind === "shot") return shot(p, env);
   const games = (Array.isArray(p.games) ? p.games : []).slice(0, 4).map(g => ({
     id: clip(g.id, 40), name: clip(g.name, 80), setup: clip(g.setup, 300), score: clip(g.score, 160), target: clip(g.target, 40)
   }));

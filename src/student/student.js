@@ -254,6 +254,24 @@ export function start(root, { students, onSignOut }) {
   const newDealer = () => ({ place: "range", shift: 0, started: false, finished: false, history: [], shot: null, t0: 0, t1: 0 });
   const dealerLevel = () => clampLevel(levelOf(S.profile?.handicap) + (S.dealer?.shift || 0));
   const dealerSave = () => { if (S.dealer?.started) draft.set(`${S.sid}.dealer`, S.dealer); else draft.clear(`${S.sid}.dealer`); };
+  async function dealerAi() {
+    const D = S.dealer, shot = D?.shot;
+    if (!shot || D.aiBusy) return;
+    D.aiBusy = true; render();
+    const sid = S.sid;
+    try {
+      const weak = summarize(D.history).bands.filter(b => b.n >= 2).map(b => ({ band: b.band, n: b.n, best: b.best })).sort((a, b) => a.best / a.n - b.best / b.n).slice(0, 2);
+      const g = goal() || {};
+      const res = await api.shotScenario({
+        place: D.place, level: SCHEDULES[dealerLevel()].name, weak,
+        shot: { title: shot.title, lines: shot.lines },
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) }
+      });
+      if (sid === S.sid && S.dealer === D) shot.ai = String(res.scenario || "");
+    } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't build a scenario right now. The shot still works as it is."); }
+    D.aiBusy = false;
+    if (sid === S.sid && S.dealer === D) { dealerSave(); render(); }
+  }
   const dealNext = () => { const D = S.dealer; D.shot = dealShot({ place: D.place, level: dealerLevel(), history: D.history, bag: D.place === "range" ? carried(myBag()) : null }); };
   function dealerScreen() {
     const D = S.dealer || (S.dealer = newDealer());
@@ -288,8 +306,10 @@ export function start(root, { students, onSignOut }) {
       <div class="deal-stats"><span><b>${D.history.filter(h => h.res != null).length + 1}</b>Shot</span><span><b>${sum.best}/${sum.total}</b>${esc(R[0][0])}</span><span><b>${sum.streak}</b>In a row</span><span><b>${esc(SCHEDULES[lvl].name)}</b>Level</span></div>
       <section class="card deal-card"><div class="deal-title">${esc(s.title)}</div>
         <ul>${s.lines.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+        ${s.ai ? `<p class="deal-ai"><b>✨ Scenario</b>${esc(s.ai)}</p>` : ""}
         <p class="muted">Do your full routine: pick a small target, one practice swing, one breath, go.</p></section>
       <div class="deal-res">${R.map(([l, sub], i) => `<button class="deal-r r${i}" data-act="dealer-res" data-r="${i}"><b>${esc(l)}</b><small>${esc(sub)}</small></button>`).join("")}</div>
+      ${S.aiAvailable && !s.ai ? `<button class="btn" data-act="dealer-ai" ${D.aiBusy ? "disabled" : ""}>${D.aiBusy ? "Thinking…" : "✨ Make it a real scenario"}</button>` : ""}
       <div class="row2"><button class="btn" data-act="dealer-skip">Can't do this one</button><button class="btn" data-act="dealer-undo" ${D.history.length ? "" : "disabled"}>Undo last</button></div>
       <button class="btn" data-act="dealer-finish">Finish${name ? ", " + esc(name) : ""}</button>
       <p class="muted" style="text-align:center">Tap how it went to get your next shot. No peeking ahead.</p></main>`;
@@ -826,6 +846,7 @@ export function start(root, { students, onSignOut }) {
     if (act === "game-log") { logGames(); return; }
     if (act === "dealer-start") { const D = S.dealer; Object.assign(D, { started: true, finished: false, history: [], t0: Date.now(), t1: 0 }); dealNext(); dealerSave(); render(); window.scrollTo(0, 0); return; }
     if (act === "dealer-res") { const D = S.dealer; D.history.push({ shot: D.shot, res: +a.dataset.r }); dealNext(); dealerSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "dealer-ai") { dealerAi(); return; }
     if (act === "dealer-skip") { dealNext(); render(); return; }
     if (act === "dealer-undo") { const D = S.dealer; const h = D.history.pop(); if (h) D.shot = h.shot; dealerSave(); render(); return; }
     if (act === "dealer-finish") { const D = S.dealer; D.finished = true; D.t1 = Date.now(); dealerSave(); render(); window.scrollTo(0, 0); return; }
@@ -1015,6 +1036,6 @@ export function start(root, { students, onSignOut }) {
 
   bindPlayer(root);
   api.touchSeen();
-  api.tailorAvailable().then(v => { S.aiAvailable = v; if (S.screen === "games") render(); }).catch(() => { S.aiAvailable = false; });
+  api.tailorAvailable().then(v => { S.aiAvailable = v; if (S.screen === "games" || S.screen === "dealer") render(); }).catch(() => { S.aiAvailable = false; });
   select(S.sid);
 }

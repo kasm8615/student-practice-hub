@@ -71,6 +71,7 @@ export const api = {
     return !!(await res.json().catch(() => ({}))).ai;
   },
   async reviewRound(payload) { return this.tailorSession({ kind: "review", ...payload }); },
+  async shotScenario(payload) { return this.tailorSession({ kind: "shot", ...payload }); },
   async readBagPhoto(base64) { return this.tailorSession({ kind: "bag-photo", image: base64 }); },
   async tailorSession(payload) {
     const token = (await supabase.auth.getSession()).data.session?.access_token;

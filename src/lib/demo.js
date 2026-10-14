@@ -95,6 +95,7 @@ export const demoApi = {
     await new Promise(r => setTimeout(r, 400));
     return { headline: `Solid ${p.round.score} with good driving; the short game cost you most.`, good: ["8 of 14 fairways, your best this month", "Only one penalty"], cost: ["3 three-putts ≈ 3 strokes", "Missed 4 of 5 up-and-downs from just off the green"], focus: "Chipping to a landing spot so your first putt is shorter.", game_id: "towel", mental: "You said you rushed after 12: take 3 breaths before the next tee.", at: new Date().toISOString() };
   },
+  async shotScenario(p) { await new Promise(r => setTimeout(r, 400)); return { scenario: `Par 4, 14th hole. You are tied in the match and your playing partner just hit it close. ${p.shot.title} is the shot you have left, with trouble waiting if you miss it.` }; },
   async readBagPhoto() { await new Promise(r => setTimeout(r, 400)); return { clubs: [{ club: "Driver", carry: 215, total: 232 }, { club: "7i", carry: 148, total: 155 }, { club: "PW", carry: 112, total: 116 }, { club: "56°", carry: 85, total: 88 }] }; },
   async tailorSession(p) {
     await new Promise(r => setTimeout(r, 400));

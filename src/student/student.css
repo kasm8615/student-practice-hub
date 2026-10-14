@@ -293,3 +293,5 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .deal-bands>div>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .deal-bands b{font-family:var(--mono);font-weight:500;font-size:13px}
 @media (prefers-reduced-motion:reduce){.deal-r:active{transform:none}}
+.deal-ai{margin:0;padding:10px 12px;border-radius:10px;background:var(--pine-soft);border:1px solid var(--line);font-size:14px;color:var(--ink)}
+.deal-ai b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--pine);margin-bottom:2px}
