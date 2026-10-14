@@ -35,18 +35,27 @@ export function start(root, { students, onSignOut }) {
 
   // ---------- data
   async function load() {
+    const sid = S.sid;
     try {
-      const [profile, entries, scores] = await Promise.all([api.studentProfile(S.sid), api.entries(S.sid), api.scores(S.sid)]);
+      const [profile, entries, scores] = await Promise.all([api.studentProfile(sid), api.entries(sid), api.scores(sid)]);
+      if (sid !== S.sid) return; // the player was switched while this was loading
       S.profile = profile; S.entries = entries; S.scores = scores; S.loading = false;
       render();
-    } catch (err) { S.loading = false; render(); toast(friendly(err)); }
+    } catch (err) { if (sid !== S.sid) return; S.loading = false; render(); toast(friendly(err)); }
   }
+  // Live updates wait while the student is typing, so the keyboard doesn't close mid-word.
+  let pendingReload = false;
+  const typing = () => { const a = document.activeElement; return !!a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox" && a.type !== "file"; };
+  function liveReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(() => { if (typing()) { pendingReload = true; return; } load(); }, 400); }
+  root.addEventListener("focusout", () => setTimeout(() => { if (pendingReload && !typing()) { pendingReload = false; load(); } }, 50));
   function select(id) {
     S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false; S.live = draft.get(`${id}.live`); S.liveSetup = null;
+    S.profile = null; S.entries = []; S.scores = []; S.bagDraft = null; S.planWeek = null; S.reviews = {}; S.bagBusy = false;
+    S.game = { ...S.game, ai: null, aiBusy: false, pin: null, seed: 0 };
     { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
-    stopWatch = api.watch([id], () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 400); });
+    stopWatch = api.watch([id], liveReload);
     render(); load();
   }
 
@@ -180,7 +189,7 @@ export function start(root, { students, onSignOut }) {
   function sessionRow(x) {
     const d = dateParts(x.date);
     return `<button class="round sess" data-sess="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
-      <span style="min-width:0"><span class="sess-areas">${(x.areas || []).map(areaChip).join("")}</span><span class="meta clamp">${esc(x.worked || x.went || "Practice")}</span></span>
+      <span style="min-width:0"><span class="sess-areas">${(Array.isArray(x.areas) ? x.areas : []).map(areaChip).join("")}</span><span class="meta clamp">${esc(x.worked || x.went || "Practice")}</span></span>
       <span class="sess-side">${x.minutes ? `<b>${esc(x.minutes)}</b><small>min</small>` : ""}${x.rating ? `<span class="rate r${+x.rating}">${RATINGS[+x.rating - 1]}</span>` : ""}</span></button>`;
   }
   function practiceForm() {
@@ -235,12 +244,12 @@ export function start(root, { students, onSignOut }) {
   function cardTable(card) {
     const app = h => (h.app?.res || []).map(x => ({ G: "✓", S: "S", Lg: "Lg", L: "L", R: "R" }[x])).join("");
     const tee = h => h.par < 4 ? "" : { fw: "✓", L: "L", R: "R" }[h.tee?.res] || "";
-    return `<div class="scroll"><table class="sc-card"><thead><tr><th>Hole</th>${card.map(h => `<th>${h.n}</th>`).join("")}</tr></thead><tbody>
-      <tr><td>Par</td>${card.map(h => `<td>${h.par}</td>`).join("")}</tr>
-      <tr class="sc-score"><td>Score</td>${card.map(h => `<td class="${h.score - h.par < 0 ? "u" : h.score - h.par >= 2 ? "o2" : h.score - h.par === 1 ? "o" : ""}">${h.score}</td>`).join("")}</tr>
+    return `<div class="scroll"><table class="sc-card"><thead><tr><th>Hole</th>${card.map(h => `<th>${esc(h.n)}</th>`).join("")}</tr></thead><tbody>
+      <tr><td>Par</td>${card.map(h => `<td>${esc(h.par)}</td>`).join("")}</tr>
+      <tr class="sc-score"><td>Score</td>${card.map(h => `<td class="${h.score - h.par < 0 ? "u" : h.score - h.par >= 2 ? "o2" : h.score - h.par === 1 ? "o" : ""}">${esc(h.score)}</td>`).join("")}</tr>
       <tr><td>Tee</td>${card.map(h => `<td>${tee(h)}</td>`).join("")}</tr>
       ${card.some(h => (h.app?.res || []).length) ? `<tr><td>Green</td>${card.map(h => `<td>${app(h)}</td>`).join("")}</tr>` : ""}
-      <tr><td>Putts</td>${card.map(h => `<td>${h.putts ?? ""}</td>`).join("")}</tr></tbody></table></div>`;
+      <tr><td>Putts</td>${card.map(h => `<td>${esc(h.putts ?? "")}</td>`).join("")}</tr></tbody></table></div>`;
   }
   // AI review of one round: saved on the round so Karina sees it too.
   function reviewHtml(r) {
@@ -274,6 +283,7 @@ export function start(root, { students, onSignOut }) {
         player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name), club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) },
         games: GAMES.map(x => ({ id: x.id, name: x.name, place: x.place, helps: x.helps }))
       });
+      if (!S.entries.some(e => e.id === id)) return; // player switched
       S.reviews[id] = { review: res };
       if (r.author === "student") { try { await api.updateEntry(r, { review: res }); await load(); } catch {} }
     } catch (err) { S.reviews[id] = null; toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't review right now. Try again later."); }
@@ -355,9 +365,11 @@ export function start(root, { students, onSignOut }) {
     if (!file) return;
     if (!S.aiAvailable) { toast("Photo reading isn't switched on yet. Type your distances instead."); return; }
     S.bagBusy = true; render();
+    const sid = S.sid;
     try {
       const img = await shrinkImage(file, 1400);
       const res = await api.readBagPhoto(img);
+      if (sid !== S.sid) return;
       const { bag, count } = mergeInto(S.bagDraft || newBag(), res.clubs || []);
       S.bagDraft = bag; keepBag();
       toast(count ? `Found ${count} club${count > 1 ? "s" : ""}. Check the numbers, then Save.` : "Couldn't find club distances in that photo.");
@@ -409,15 +421,15 @@ export function start(root, { students, onSignOut }) {
     const sec = (title, inner) => `<div class="lv-sec"><h3 class="sh3">${title}</h3>${inner}</div>`;
     const clubSel = (path, cur) => `<select class="lv-club" data-lvsel="${path}" aria-label="Club"><option value="">Club</option>${CLUBS.map(c => `<option ${c === cur ? "selected" : ""}>${c}</option>`).join("")}</select>`;
     const missedGreen = (h.app.res || []).length && !h.app.res.includes("G");
-    const scores = [h.par - 1, h.par, h.par + 1, h.par + 2, h.par + 3];
-    const names = { [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Double", 3: "Triple" };
+    const scores = [h.par - 2, h.par - 1, h.par, h.par + 1, h.par + 2, h.par + 3].filter(v => v >= 1);
+    const names = { [-2]: h.par === 3 ? "Ace" : "Eagle", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Double", 3: "Triple" };
     const t = totals(L.card);
     return `<header class="lv-top"><button class="linkbtn" data-act="live-leave">‹ Rounds</button><span>${esc(L.course || "Round")} · ${t.holes ? `${t.score - t.par >= 0 ? "+" : ""}${t.score - t.par} thru ${t.holes}` : "Hole 1"}</span></header>
       <main class="s-content lv">
       <div class="lv-strip">${L.card.map((x, i) => `<button data-lvgo="${i}" class="${i === L.cur ? "cur" : ""} ${x.score != null ? "done" : ""}" aria-label="Hole ${x.n}">${x.n}${x.score != null ? `<small>${x.score}</small>` : ""}</button>`).join("")}</div>
       <section class="card lv-card">
         <div class="lv-head"><h2 class="lv-hole">Hole ${h.n}</h2><div class="pick">${[3, 4, 5].map(p => b("par", p, "Par " + p, h.par === p, "sm")).join("")}</div></div>
-        ${sec("Score", `<div class="pick lv-score">${scores.map(v => b("score", v, `<b>${v}</b><small>${names[v - h.par] || ""}</small>`, h.score === v)).join("")}${b("score", (h.score ?? h.par + 3) + 1, h.score > h.par + 3 ? `<b>${h.score}</b><small>+ more</small>` : "<b>+</b><small>more</small>", h.score > h.par + 3)}</div>`)}
+        ${sec("Score", `<div class="pick lv-score">${scores.map(v => b("score", v, `<b>${v}</b><small>${names[v - h.par] || ""}</small>`, h.score === v)).join("")}${b("score", Math.max(h.score ?? 0, h.par + 3) + 1, h.score > h.par + 3 ? `<b>${h.score}</b><small>+ more</small>` : "<b>+</b><small>more</small>", h.score > h.par + 3)}</div>`)}
         ${h.par >= 4 ? sec("Tee shot", `<div class="pick">${b("tee.res", "fw", "Fairway", h.tee.res === "fw")}${b("tee.res", "L", "← Left", h.tee.res === "L")}${b("tee.res", "R", "Right →", h.tee.res === "R")}${full ? clubSel("tee.club", h.tee.club) : ""}</div>
           ${full && (h.tee.res === "L" || h.tee.res === "R") ? `<div class="pick lv-start">${b("tee.start", "curve", "Started on target, curved away", h.tee.start === "curve")}${b("tee.start", "off", "Started off target, stayed there", h.tee.start === "off")}</div>` : ""}`) : ""}
         ${full ? sec(h.par === 3 ? "Tee shot (into the green)" : "Shot into the green", `<div class="lv-row"><label>Distance <input class="lv-num" data-lvin="app.yds" inputmode="numeric" value="${esc(h.app.yds)}" placeholder="yds"></label>${clubSel("app.club", h.app.club)}</div>
@@ -480,7 +492,7 @@ export function start(root, { students, onSignOut }) {
     if (!t.holes) { toast("Enter a score on at least one hole."); return; }
     const card = L.card.filter(h => h.score != null);
     const notes = root.querySelector("#lv-notes")?.value.trim() || "";
-    const d = { date: L.date || today(), event: L.event, course: L.course, holes: t.holes > 9 ? "18" : "9", holes_played: t.holes, score: t.score, putts: t.putts, fairways: t.fairways, gir: t.gir, updown: t.updown,
+    const d = { date: L.date || today(), event: L.event, course: L.course, holes: t.holes === 18 ? "18" : t.holes === 9 ? "9" : String(t.holes), holes_played: t.holes, score: t.score, putts: t.putts, fairways: t.fairways, gir: t.gir, updown: t.updown,
       penalties: t.penalties, threeputts: t.threeputts, doubles: t.doubles, par: t.par, notes, mode: L.mode, card, patterns: patterns(card) };
     try { if (L.course) localStorage.setItem("sph.pars." + L.course.trim().toLowerCase(), JSON.stringify(Object.fromEntries(L.card.map(h => [h.n, h.par])))); } catch {}
     let saved = null;
@@ -609,21 +621,25 @@ export function start(root, { students, onSignOut }) {
     const scr = { home, plan: planScreen, games: gamesScreen, live: liveScreen, bag: bagScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
-    root.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
+    root.querySelectorAll("textarea[id],input[id],select[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
+    const act = document.activeElement, focusId = act && root.contains(act) ? act.id : "";
+    let caret = null; try { caret = focusId && act.selectionStart != null ? [act.selectionStart, act.selectionEnd] : null; } catch {}
     const prevVideo = noteVideo && S.screen === "notes" ? noteVideo.value : "";
     root.innerHTML = `<div class="s-app">${scr}</div>${nav()}${sheetHtml()}`;
     Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.value !== v) el.value = v; });
     root.querySelectorAll(DRAFTABLE).forEach(el => { const v = draft.get(`${S.sid}.${el.id}`); if (v != null) el.value = v; });
     const nv = document.getElementById("noteVideo");
     noteVideo = nv ? videoField(nv, prevVideo, { label: "Attach a swing video" }) : null;
+    if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus({ preventScroll: true }); try { if (caret) el.setSelectionRange(caret[0], caret[1]); } catch {} } }
     window.scrollTo(0, y);
-    document.body.style.overflow = S.sheet ? "hidden" : "";
+    document.body.style.overflow = S.sheet && root.querySelector(".sheet") ? "hidden" : "";
+    if (S.sheet && !root.querySelector(".sheet")) S.sheet = null; // its entry was deleted
   }
   function openPractice() {
     // Start with the parts of the game from today's plan blocks.
     const todays = plan().filter(x => blockDate(x) === today());
     S.sess = { areas: [...new Set(todays.map(x => x.area).filter(a => AREA_NAMES.includes(a)))], rating: 0 };
-    S.screen = "plan"; S.practiceOpen = true; S.logOpen = false; S.sheet = null; render();
+    S.screen = "plan"; S.planWeek = null; S.practiceOpen = true; S.logOpen = false; S.sheet = null; render();
     const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
   }
   // Opens the practice log filled in with this session's games, ready for scores.
@@ -632,13 +648,14 @@ export function start(root, { students, onSignOut }) {
     draft.set(`${S.sid}.p-worked`, games.map(g => `${g.name}: score ___ (${g.score.replace(/\.$/, "")})`).join("\n"));
     draft.set(`${S.sid}.p-min`, String(games.reduce((a, g) => a + g.min, 0)));
     S.sess = { areas: [...new Set(games.map(g => g.area).filter(a => AREA_NAMES.includes(a)))], rating: 0, games: games.map(g => g.id), week: S.game.week };
-    S.screen = "plan"; S.practiceOpen = true; S.sheet = null; render();
+    S.screen = "plan"; S.planWeek = null; S.practiceOpen = true; S.sheet = null; render();
     const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
   }
   async function tailor() {
     const { games, focus } = currentSession();
     if (!games.length) return;
     S.game.aiBusy = true; render();
+    const sid = S.sid;
     try {
       const g = goal() || {};
       const mine = myAverages(of("stat"));
@@ -649,14 +666,16 @@ export function start(root, { students, onSignOut }) {
         games: games.map(x => ({ id: x.id, name: x.name, setup: x.setup, score: x.score, target: x.pass[levelOf(S.profile?.handicap)] })),
         player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent, club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) }
       });
+      if (sid !== S.sid) return;
       S.game.ai = { ...res, key: sessionKey(games) };
     } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't tailor right now. The games still work as they are."); }
     S.game.aiBusy = false; render();
   }
-  function go(screen) { if (screen === "plan" && S.screen !== "plan") S.planWeek = null; if (screen === "bag" && S.screen !== "bag") S.bagDraft = draft.get(`${S.sid}.bagdraft`); S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
+  function go(screen) { if (root.querySelector(".vprog")) { toast("Wait for the video to finish uploading."); return; } if (screen === "plan" && S.screen !== "plan") S.planWeek = null; if (screen === "bag" && S.screen !== "bag") S.bagDraft = draft.get(`${S.sid}.bagdraft`); S.screen = screen; S.liveSetup = null; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
   function openScore(entryId, drillId) {
     const p = S.entries.find(e => e.id === entryId);
     const dr = drillById(drillId || p?.drill);
+    if (!dr) { S.sheet = null; render(); return; }
     const l = lastScore(dr.id);
     S.sheet = { kind: "score", id: entryId, drill: dr.id, val: l ? l.score : Math.round((+dr.of || 10) / 2) };
     render();
@@ -711,7 +730,7 @@ export function start(root, { students, onSignOut }) {
       S.bagDraft = bag; keepBag(); toast("Estimated. Now fix any club you know better, then Save."); render(); return;
     }
     if (act === "bag-add") { S.bagDraft.push({ club: "", carry: "", total: "", on: true }); render(); root.querySelector(".bag-row:last-of-type .bag-name")?.focus(); return; }
-    if (act === "live-new") { S.liveSetup = { course: "", date: today(), event: "Casual", holes: "18", mode: "quick" }; S.screen = "live"; S.sheet = null; render(); window.scrollTo(0, 0); return; }
+    if (act === "live-new") { if (S.live) { toast("Finish or discard your round in progress first."); return; } S.liveSetup = { course: "", date: today(), event: "Casual", holes: "18", mode: "quick" }; S.screen = "live"; S.sheet = null; render(); window.scrollTo(0, 0); return; }
     if (act === "live-start") {
       const st = S.liveSetup; st.course = root.querySelector("#lv-course").value.trim(); st.date = root.querySelector("#lv-date").value || today(); st.event = root.querySelector("#lv-event").value;
       const nums = st.holes === "front" ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : st.holes === "back" ? [10, 11, 12, 13, 14, 15, 16, 17, 18] : Array.from({ length: 18 }, (_, i) => i + 1);
@@ -719,7 +738,7 @@ export function start(root, { students, onSignOut }) {
       S.live = { course: st.course, date: st.date, event: st.event, mode: st.mode, cur: 0, card: nums.map(n => newHole(n, +pars[n] || 4)) };
       S.liveSetup = null; saveLive(); render(); window.scrollTo(0, 0); return;
     }
-    if (act === "live-resume") { S.screen = "live"; render(); window.scrollTo(0, 0); return; }
+    if (act === "live-resume") { S.liveSetup = null; S.screen = "live"; render(); window.scrollTo(0, 0); return; }
     if (act === "live-leave") { S.screen = "rounds"; render(); return; }
     if (act === "live-discard") {
       if (!a.classList.contains("armed")) { a.classList.add("armed"); a.textContent = "Tap again to discard"; setTimeout(() => { a.classList.remove("armed"); a.textContent = "Discard"; }, 3500); return; }
@@ -828,7 +847,7 @@ export function start(root, { students, onSignOut }) {
       const sid = S.sid;
       draft.clear(`${sid}.note`);
       const ok = await run(() => api.addEntry(sid, "note", video_pid ? { text, video_pid } : { text }), video_pid ? "Video sent to Karina" : "Sent to Karina");
-      if (!ok) { draft.set(`${sid}.note`, text); const el = root.querySelector("#note"); if (el) el.value = text; }
+      if (!ok) { draft.set(`${sid}.note`, text); const el = root.querySelector("#note"); if (el) el.value = text; if (noteVideo && video_pid) noteVideo.value = video_pid; }
     }
   };
 

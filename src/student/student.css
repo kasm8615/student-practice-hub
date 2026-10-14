@@ -192,10 +192,10 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .lv-sec .sh3{margin:0}
 .pick-btn.sm{padding:5px 10px;font-size:12px}
 .pick-btn.good[aria-pressed="true"]{background:var(--good);border-color:var(--good)}
-.lv-score{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.lv-score{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .lv-score .pick-btn{display:flex;flex-direction:column;align-items:center;padding:8px 2px;border-radius:12px;gap:1px}
-.lv-score .pick-btn b{font-size:20px;line-height:1}
-.lv-score .pick-btn small{font-size:9.5px;font-weight:600;opacity:.8}
+.lv-score .pick-btn b{font-size:19px;line-height:1}
+.lv-score .pick-btn small{font-size:9px;font-weight:600;opacity:.8}
 .lv-start .pick-btn{flex:1 1 100%;text-align:left;border-radius:10px}
 .lv-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;font-weight:600;color:var(--ink-2);flex-wrap:wrap}
 .lv-row label{display:flex;align-items:center;gap:8px}

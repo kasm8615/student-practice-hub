@@ -18,7 +18,7 @@ export function today() {
 }
 export const todayIndex = () => (new Date().getDay() + 6) % 7; // Mon = 0
 export function dateParts(d) {
-  if (!d) return { d: "–", m: "" };
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(String(d))) return { d: "–", m: "", mon: "" };
   const [y, m, dd] = d.split("-");
   return { d: String(+dd), m: MONTHS[+m - 1] + " " + y.slice(2), mon: MONTHS[+m - 1] };
 }

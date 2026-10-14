@@ -199,3 +199,4 @@ a{color:var(--pine)}
 .week .day.is-today{outline:2px solid var(--pine);outline-offset:-1px}
 .add-day{border:1px dashed var(--line);background:none;border-radius:8px;padding:6px;font-size:12px;font-weight:600;color:var(--pine);width:100%;margin-top:auto}
 .bag-t{font-size:13px}.bag-t .gapflag{color:var(--warn);font-weight:700}
+.bag-t{min-width:0!important;width:100%}

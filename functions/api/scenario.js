@@ -72,8 +72,8 @@ async function review(p, env) {
   const games = (Array.isArray(p.games) ? p.games : []).slice(0, 60).map(g => ({ id: clip(g.id, 40), name: clip(g.name, 80), place: clip(g.place, 20), helps: (g.helps || []).slice(0, 5).map(h => clip(h, 20)) }));
   const pl = p.player || {};
   const user = JSON.stringify({
-    round, patterns: p.patterns || null, holes: Array.isArray(p.holes) ? p.holes.slice(0, 18) : null, previous_rounds: (p.previous || []).slice(0, 5), target_score: +p.target || null, benchmark_for_target: p.benchmark || null,
-    player: { handicap: clip(pl.handicap, 10), group: clip(pl.group, 10), goals: Object.fromEntries(Object.entries(pl.goals || {}).slice(0, 4).map(([k, v]) => [clip(k, 10), clip(v, 200)])), current_drills: (pl.drills || []).slice(0, 6).map(d => clip(d, 60)) },
+    round, patterns: p.patterns || null, holes: Array.isArray(p.holes) ? p.holes.slice(0, 18) : null, previous_rounds: (Array.isArray(p.previous) ? p.previous : []).slice(0, 5), target_score: +p.target || null, benchmark_for_target: p.benchmark || null,
+    player: { handicap: clip(pl.handicap, 10), group: clip(pl.group, 10), goals: Object.fromEntries(Object.entries(pl.goals || {}).slice(0, 4).map(([k, v]) => [clip(k, 10), clip(v, 200)])), current_drills: (Array.isArray(pl.drills) ? pl.drills : []).slice(0, 6).map(d => clip(d, 60)), club_carries: (Array.isArray(pl.club_carries) ? pl.club_carries : []).slice(0, 20).map(c => clip(c, 30)) },
     game_library: games
   });
   if (user.length > 20000) return json({ error: "This round has too much data to review." }, 400);
@@ -125,11 +125,13 @@ export async function onRequestPost({ request, env }) {
   const player = {
     handicap: clip(pl.handicap, 10), group: clip(pl.group, 10),
     goals: Object.fromEntries(Object.entries(pl.goals || {}).slice(0, 4).map(([k, v]) => [clip(k, 10), clip(v, 200)])),
-    averages_last_rounds: pl.averages || null,
-    current_drills: (pl.drills || []).slice(0, 6).map(d => clip(d, 60)),
-    recent_practice_notes: (pl.recent || []).slice(0, 3).map(r => clip(r, 300))
+    averages_last_rounds: pl.averages && typeof pl.averages === "object" ? Object.fromEntries(Object.entries(pl.averages).slice(0, 8).filter(([, v]) => v == null || Number.isFinite(+v)).map(([k, v]) => [clip(k, 20), v == null ? null : Math.round(+v * 10) / 10])) : null,
+    club_carries: (Array.isArray(pl.club_carries) ? pl.club_carries : []).slice(0, 20).map(c => clip(c, 30)),
+    current_drills: (Array.isArray(pl.drills) ? pl.drills : []).slice(0, 6).map(d => clip(d, 60)),
+    recent_practice_notes: (Array.isArray(pl.recent) ? pl.recent : []).slice(0, 3).map(r => clip(r, 300))
   };
-  const user = JSON.stringify({ place: clip(p.place, 20), minutes: +p.minutes || 0, focus: clip(p.focus, 20), week: clip(p.week || "normal", 12), days_to_tournament: p.days_to_tournament ?? null, games, player });
+  const user = JSON.stringify({ place: clip(p.place, 20), minutes: +p.minutes || 0, focus: clip(p.focus, 20), week: clip(p.week || "normal", 12), days_to_tournament: Number.isFinite(+p.days_to_tournament) && p.days_to_tournament !== null ? Math.round(+p.days_to_tournament) : null, games, player });
+  if (user.length > 20000) return json({ error: "Too much data to tailor." }, 400);
 
   const parsed = await claude(env, SYSTEM, user);
   if (!parsed) return json({ error: "Couldn't tailor right now. The games still work as they are." }, 502);

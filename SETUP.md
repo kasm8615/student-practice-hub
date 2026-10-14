@@ -105,3 +105,7 @@ Rounds → **Track a round hole by hole**. Quick mode: score, putts, fairway, pe
 ## Club distances (update 3)
 
 Supabase SQL Editor → run `supabase/update-3.sql`. Students open Rounds → **My club distances** (or the menu). They can read distances from a photo (needs `ANTHROPIC_API_KEY`), estimate from their 7 iron, or type them. Karina sees the table and gap warnings on the student's Overview. The round tracker shows the closest clubs for the distance typed in.
+
+## Update 4 (security fixes)
+
+Supabase SQL Editor → run `supabase/update-4.sql`. A brand-new database runs, in order: `schema.sql`, `notify.sql` (with the secret), `update-2.sql`, `update-3.sql`, `update-4.sql`.

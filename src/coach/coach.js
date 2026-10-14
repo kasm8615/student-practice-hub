@@ -181,7 +181,7 @@ export function start(root, { onSignOut }) {
         <div class="drl drl-col">${esc(r.drl)}</div>
         <div class="act">${r.st === "good" ? `<span class="pill good">On track</span>` : `<button class="btn small" data-remind="${esc(r.s.id)}">Copy reminder</button>`}</div></div>`).join("")}</div>`
         : `<div class="empty">Add your first student to start tracking practice.</div>`}
-      <p style="font-size:12px;color:var(--ink-3);margin:0">"Copy reminder" copies a friendly text with their plan, ready to paste into a message. Use "Start new week" on each student's Practice Plan tab to reset ticks.</p>
+      <p style="font-size:12px;color:var(--ink-3);margin:0">"Copy reminder" copies a friendly text with their plan, ready to paste into a message. Use "Copy to next week" on each student's Practice Plan tab to plan the next week.</p>
     </section>`;
   }
   function reminderText(s) {
@@ -232,7 +232,7 @@ export function start(root, { onSignOut }) {
     const lessons = sortDateDesc(of("lesson"));
     const drills = of("drill");
     const active = drills.filter(d => d.status !== "Mastered");
-    const plan = of("plan");
+    const plan = of("plan").filter(p => weekStartOf(blockDate(p)) === weekStartOf());
     const planned = plan.reduce((a, p) => a + (+p.minutes || 0), 0);
     const done = plan.filter(p => p.done).reduce((a, p) => a + (+p.minutes || 0), 0);
     const rounds = sortDateDesc(of("stat"));
@@ -387,8 +387,8 @@ export function start(root, { onSignOut }) {
       ${last30.length ? `<div class="box" style="display:flex;flex-direction:column;gap:8px"><h4 style="margin:0">Focus, last 30 days</h4>${focusBar(last30.flatMap(x => (x.areas || []).map(a => ({ a, m: (+x.minutes || 0) / (x.areas.length || 1) }))).map(o => ({ ...o, m: Math.round(o.m) })), o => o.m, o => o.a)}</div>` : ""}
       ${r.length ? `<div class="entries">${r.map(e => { const dp = dateParts(e.date); return `<div class="entry">
         <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
-        <div><div class="t">${(e.areas || []).map(areaChip).join(" ") || "Practice"}${e.week ? ` <span class="pill neutral">${esc({ tournament: "Tournament week", swing: "Swing change", fun: "With friends" }[e.week] || e.week)}</span>` : ""}</div>
-          ${e.games?.length ? `<div class="body"><b>Practice games:</b> ${e.games.map(id => esc(GAMES.find(g => g.id === id)?.name || (id.startsWith("drill-") ? (of("drill").find(d => "drill-" + d.id === id)?.name || "Your drill") : id))).join(", ")}</div>` : ""}
+        <div><div class="t">${(Array.isArray(e.areas) ? e.areas : []).map(areaChip).join(" ") || "Practice"}${e.week ? ` <span class="pill neutral">${esc({ tournament: "Tournament week", swing: "Swing change", fun: "With friends" }[e.week] || e.week)}</span>` : ""}</div>
+          ${Array.isArray(e.games) && e.games.length ? `<div class="body"><b>Practice games:</b> ${e.games.map(String).map(id => esc(GAMES.find(g => g.id === id)?.name || (id.startsWith("drill-") ? (of("drill").find(d => "drill-" + d.id === id)?.name || "Your drill") : id))).join(", ")}</div>` : ""}
           ${e.worked ? `<div class="body" style="white-space:pre-wrap"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}${e.went ? `<div class="body"><b>How it went:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>Next time:</b> ${esc(e.next)}</div>` : ""}</div>
         <div style="text-align:right">${e.minutes ? `<div class="hcp" style="font-size:18px">${esc(e.minutes)} min</div>` : ""}${e.rating ? `<span class="pill ${+e.rating >= 4 ? "good" : +e.rating === 3 ? "warn" : "bad"}">${RATINGS[+e.rating - 1]}</span>` : ""}</div></div>`; }).join("")}</div>`
         : `<div class="empty">No practice logged yet. ${first} logs sessions from the Plan screen or Home.</div>`}`;
@@ -397,11 +397,11 @@ export function start(root, { onSignOut }) {
   function holesTable(card) {
     const dir = { G: "Green", S: "Short", Lg: "Long", L: "Left", R: "Right" };
     return `<div class="box scroll"><h4>Hole by hole</h4><table class="card holes-t"><thead><tr><th>#</th><th>Par</th><th>Score</th><th>Tee</th><th>Into green</th><th>Around green</th><th class="n">1st putt</th><th class="n">Putts</th><th>Trouble</th></tr></thead><tbody>
-      ${card.map(h => `<tr><td>${h.n}</td><td>${h.par}</td><td><b>${h.score}</b></td>
+      ${card.map(h => `<tr><td>${esc(h.n)}</td><td>${esc(h.par)}</td><td><b>${esc(h.score)}</b></td>
         <td>${h.par >= 4 ? esc([{ fw: "Fairway", L: "Left", R: "Right" }[h.tee?.res], h.tee?.start === "curve" ? "curved" : h.tee?.start === "off" ? "started off" : "", h.tee?.club && h.tee.res ? `(${h.tee.club})` : ""].filter(Boolean).join(" ")) : ""}</td>
         <td>${esc([(h.app?.res || []).map(r => dir[r]).join("-"), h.app?.club, h.app?.yds ? h.app.yds + " yds" : ""].filter(Boolean).join(", "))}</td>
         <td>${(h.app?.res || []).length && !h.app.res.includes("G") ? esc(h.sg?.kind === "bunker" ? `Bunker${h.sg.out === true ? ", out in one" : h.sg.out === false ? ", not out in one" : ""}` : { on: "Chip on spot", short: "Chip landed short", long: "Chip landed long" }[h.sg?.land] || "") : ""}</td>
-        <td class="n">${h.fp ? esc(h.fp) + " ft" : ""}</td><td class="n">${h.putts ?? ""}</td>
+        <td class="n">${h.fp ? esc(h.fp) + " ft" : ""}</td><td class="n">${esc(h.putts ?? "")}</td>
         <td>${esc([h.pen ? `${h.pen} pen${h.penFrom ? " (" + ({ tee: "tee", app: "approach", other: "other" }[h.penFrom]) + ")" : ""}` : "", h.rec ? "recovery" : ""].filter(Boolean).join(", "))}</td></tr>`).join("")}
       </tbody></table></div>`;
   }

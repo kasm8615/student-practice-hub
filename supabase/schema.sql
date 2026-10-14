@@ -263,6 +263,8 @@ create or replace view public.students_public with (security_invoker = false) as
   select id, name, grp, handicap, program, start_date, next_lesson, goals
   from public.students
   where not archived and (is_coach() or id in (select my_students()));
+revoke insert, update, delete, truncate on public.students_public from anon, authenticated, public;
+revoke select on public.students_public from anon, public;
 grant select on public.students_public to authenticated;
 
 -- Live updates for the app.
