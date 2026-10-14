@@ -267,3 +267,29 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .swing-art{width:130px;height:auto}
 .fig{stroke:var(--ink-2);stroke-width:4;stroke-linecap:round;fill:none}
 .pct-bg{fill:var(--surface-2);stroke:var(--line)}
+
+/* Shot dealer */
+.games-cta.alt{background:var(--pine-soft);color:var(--ink);border:1px solid var(--line)}
+.games-cta.alt span{opacity:1;color:var(--ink-2)}
+.deal-sched{display:flex;flex-direction:column;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--ink-2)}
+.deal-sched b{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--pine)}
+.deal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.deal-stats span{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;min-width:0}
+.deal-stats b{font-family:var(--display);font-size:19px;line-height:1.1;color:var(--ink);text-transform:none;letter-spacing:0;white-space:nowrap}
+.deal-stats span:last-child b{font-size:15px;padding-top:3px}
+.deal-card{gap:8px}
+.deal-title{font-family:var(--display);font-size:44px;line-height:1;color:var(--pine);font-weight:700}
+.deal-card ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:16px}
+.deal-res{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.deal-r{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:76px;padding:8px 4px;border-radius:14px;border:1px solid var(--line);background:var(--surface);text-align:center}
+.deal-r b{font-size:15px}
+.deal-r small{font-size:11px;color:var(--ink-3);line-height:1.2}
+.deal-r.r0{background:var(--good-soft);border-color:var(--good)}
+.deal-r.r1{background:var(--warn-soft);border-color:var(--warn)}
+.deal-r.r2{background:var(--bad-soft);border-color:var(--bad)}
+.deal-r:active{transform:scale(.97)}
+.deal-bands{display:flex;flex-direction:column;gap:8px}
+.deal-bands>div{display:grid;grid-template-columns:116px 1fr auto;gap:10px;align-items:center;font-size:14px}
+.deal-bands>div>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deal-bands b{font-family:var(--mono);font-weight:500;font-size:13px}
+@media (prefers-reduced-motion:reduce){.deal-r:active{transform:none}}

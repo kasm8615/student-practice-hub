@@ -7,6 +7,7 @@ import { trendHtml } from "../lib/trend.js";
 import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor, SWINGS, SWING_STYLES, swingsFor, newWedges, estimateWedges, wedgeFor } from "../lib/bag.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
+import { DEALER_PLACES, SCHEDULES, RESULTS, dealShot, summarize, bandLines, clampLevel } from "../lib/shotdeck.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, dayNum, blockDate } from "../lib/util.js";
 
@@ -54,6 +55,7 @@ export function start(root, { students, onSignOut }) {
     S.sid = id; S.loading = true; S.sheet = null; S.screen = "home"; S.goalDraft = {}; S.calc = null; S.practiceOpen = false; S.live = draft.get(`${id}.live`); S.liveSetup = null;
     S.profile = null; S.entries = []; S.scores = []; S.bagDraft = null; S.wedgeDraft = null; S.bagTab = "bag"; S.planWeek = null; S.reviews = {}; S.bagBusy = false;
     S.game = { ...S.game, ai: null, aiBusy: false, pin: null, seed: 0 };
+    { const d = draft.get(`${id}.dealer`); S.dealer = d && Array.isArray(d.history) && d.t0 > Date.now() - 864e5 ? d : null; }
     { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
@@ -178,6 +180,7 @@ export function start(root, { students, onSignOut }) {
       <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p>`);
     return top("Practice plan", S.profile?.name || "") + `<main class="s-content">
       <button class="games-cta" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game. Tap to get a session.</span></button>
+      <button class="games-cta alt" data-go="dealer"><b>Shot dealer</b><span>Random shots, one at a time. You can't plan the next one, so it trains you for the course.</span></button>
       ${planPart}${practiceLog()}</main>`;
   }
   function practiceLog() {
@@ -217,6 +220,7 @@ export function start(root, { students, onSignOut }) {
     const tipFor = id => ai?.games?.find(x => x.id === id);
     const pick = (attr, list, cur) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn" ${attr}="${esc(v)}" aria-pressed="${String(cur) === String(v)}">${esc(l)}</button>`).join("")}</div>`;
     return top("Practice games", S.profile?.name || "") + `<main class="s-content">
+      <button class="games-cta alt" data-go="dealer"><b>Shot dealer</b><span>Random shots, one at a time. You can't plan the next one, so it trains you for the course.</span></button>
       <section class="card">
         <fieldset class="field"><legend>This week I'm…</legend>${pick("data-gweek", WEEKS, G.week)}
           ${G.week === "tournament" ? `<div class="lv-row"><label>Tournament day <input type="date" id="g-tdate" class="lv-num" style="width:auto" value="${esc(G.tdate)}"></label>${daysOut() != null && daysOut() >= 0 ? `<span class="pill n">${daysOut() === 0 ? "Today!" : daysOut() + " day" + (daysOut() > 1 ? "s" : "") + " to go"}</span>` : ""}</div>` : ""}</fieldset>
@@ -244,6 +248,51 @@ export function start(root, { students, onSignOut }) {
       : `<div class="card"><p class="muted">No games for that choice yet. Try another place or more time.</p></div>`}
       <p class="muted" style="text-align:center">Targets are set for your level. Write your scores in the practice log so Karina can see them.</p>
     </main>`;
+  }
+
+  // ---------- shot dealer (random practice, one shot at a time)
+  const newDealer = () => ({ place: "range", shift: 0, started: false, finished: false, history: [], shot: null, t0: 0, t1: 0 });
+  const dealerLevel = () => clampLevel(levelOf(S.profile?.handicap) + (S.dealer?.shift || 0));
+  const dealerSave = () => { if (S.dealer?.started) draft.set(`${S.sid}.dealer`, S.dealer); else draft.clear(`${S.sid}.dealer`); };
+  const dealNext = () => { const D = S.dealer; D.shot = dealShot({ place: D.place, level: dealerLevel(), history: D.history, bag: D.place === "range" ? carried(myBag()) : null }); };
+  function dealerScreen() {
+    const D = S.dealer || (S.dealer = newDealer());
+    const lvl = dealerLevel(), sch = SCHEDULES[lvl], name = firstName();
+    const pick = (attr, list, cur) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn" ${attr}="${esc(v)}" aria-pressed="${String(cur) === String(v)}">${esc(l)}</button>`).join("")}</div>`;
+    if (!D.started) {
+      const hasBag = D.place === "range" && carried(myBag()).length >= 3;
+      return top("Shot dealer", S.profile?.name || "") + `<main class="s-content">
+        <section class="card"><h2>Random shots, one at a time</h2>
+          <p class="muted">On the course you never hit the same shot twice. The dealer gives you one shot at a time and you only see the next one after you finish this one. It feels harder than hitting a bucket with one club, and that is what makes it stick.</p>
+          <fieldset class="field"><legend>Where are you?</legend>${pick("data-dplace", DEALER_PLACES, D.place)}</fieldset>
+          <fieldset class="field"><legend>How hard?</legend>${pick("data-dshift", [[-1, "Easier"], [0, "For my level"], [1, "Harder"]], D.shift)}</fieldset>
+          <div class="deal-sched"><b>${esc(sch.name)}</b><span>${esc(sch.line)}</span></div>
+          ${hasBag ? `<p class="muted">Using the distances in your bag.</p>` : ""}
+          <button class="btn primary" data-act="dealer-start">Deal my first shot</button></section>
+        <p class="muted" style="text-align:center">Most of your practice should be this kind. Short blocks of the same shot are for learning something brand new.</p></main>`;
+    }
+    const sum = summarize(D.history);
+    if (D.finished) {
+      const mins = Math.max(1, Math.min(90, Math.round((D.t1 - D.t0) / 60000)));
+      return top("Shot dealer", S.profile?.name || "") + `<main class="s-content">
+        <section class="card"><h2>Session done <span>${sum.total} shots · ${mins} min</span></h2>
+          ${sum.total ? `<p><b>${sum.best} of ${sum.total}</b> ${esc(RESULTS[D.place][0][0].toLowerCase())}${sum.bestStreak > 1 ? ` · best streak ${sum.bestStreak}` : ""}</p>
+          <div class="deal-bands">${sum.bands.map(b => `<div><span>${esc(b.band)}</span><div class="bar plain"><i style="width:${Math.round(b.best / b.n * 100)}%"></i></div><b>${b.best}/${b.n}</b></div>`).join("")}</div>
+          <p class="muted">Look at the bands, not the total. A weak band is your next thing to work on. Scores run lower in random practice than in blocks. That is normal and it is not a sign it isn't working. Check again next week.</p>`
+          : `<p class="muted">No shots scored this time.</p>`}</section>
+        <button class="btn primary" data-act="dealer-log">Log this practice</button>
+        <div class="row2"><button class="btn" data-act="dealer-resume">Keep going</button><button class="btn" data-act="dealer-reset">Start over</button></div></main>`;
+    }
+    const s = D.shot || (dealNext(), D.shot), R = RESULTS[D.place];
+    return top("Shot dealer", S.profile?.name || "") + `<main class="s-content">
+      <div class="deal-stats"><span><b>${D.history.filter(h => h.res != null).length + 1}</b>Shot</span><span><b>${sum.best}/${sum.total}</b>${esc(R[0][0])}</span><span><b>${sum.streak}</b>In a row</span><span><b>${esc(SCHEDULES[lvl].name)}</b>Level</span></div>
+      <section class="card deal-card"><div class="deal-title">${esc(s.title)}</div>
+        <ul>${s.lines.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+        <p class="muted">Do your full routine: pick a small target, one practice swing, one breath, go.</p></section>
+      <div class="deal-res">${R.map(([l, sub], i) => `<button class="deal-r r${i}" data-act="dealer-res" data-r="${i}"><b>${esc(l)}</b><small>${esc(sub)}</small></button>`).join("")}</div>
+      <div class="row2"><button class="btn" data-act="dealer-skip">Can't do this one</button><button class="btn" data-act="dealer-undo" ${D.history.length ? "" : "disabled"}>Undo last</button></div>
+      <button class="btn" data-act="dealer-finish">Finish${name ? ", " + esc(name) : ""}</button>
+      <p class="muted" style="text-align:center">Tap how it went to get your next shot. No peeking ahead.</p></main>`;
   }
   function cardTable(card) {
     const app = h => (h.app?.res || []).map(x => ({ G: "✓", S: "S", Lg: "Lg", L: "L", R: "R" }[x])).join("");
@@ -585,7 +634,7 @@ export function start(root, { students, onSignOut }) {
   }
   function nav() {
     const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -665,7 +714,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, games: gamesScreen, live: liveScreen, bag: bagScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id],select[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -748,6 +797,8 @@ export function start(root, { students, onSignOut }) {
     if (ls && S.liveSetup) { S.liveSetup.course = root.querySelector("#lv-course")?.value || ""; S.liveSetup.date = root.querySelector("#lv-date")?.value || today(); S.liveSetup.event = root.querySelector("#lv-event")?.value || "Casual";
       if (ls.dataset.lsholes) S.liveSetup.holes = ls.dataset.lsholes; else S.liveSetup.mode = ls.dataset.lsmode; render(); return; }
     const gp = t.closest("[data-gplace]"); if (gp) { const pl = gp.dataset.gplace; S.game.place = pl; S.game.seed = 0; S.game.pin = null; if (pl === "course" && S.game.minutes < 60) S.game.minutes = 90; if (pl !== "course" && S.game.minutes > 60) S.game.minutes = 30; render(); return; }
+    const dp = t.closest("[data-dplace]"); if (dp && S.dealer) { S.dealer.place = dp.dataset.dplace; render(); return; }
+    const ds = t.closest("[data-dshift]"); if (ds && S.dealer) { S.dealer.shift = +ds.dataset.dshift; render(); return; }
     const pw = t.closest("[data-pweek]"); if (pw) { S.planWeek = addDays(S.planWeek || weekStartOf(), +pw.dataset.pweek); render(); return; }
     const tr = t.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
     if (tr) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
@@ -773,6 +824,25 @@ export function start(root, { students, onSignOut }) {
     if (act === "practice") { openPractice(); return; }
     if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; S.game.pin = null; render(); window.scrollTo(0, 0); return; }
     if (act === "game-log") { logGames(); return; }
+    if (act === "dealer-start") { const D = S.dealer; Object.assign(D, { started: true, finished: false, history: [], t0: Date.now(), t1: 0 }); dealNext(); dealerSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "dealer-res") { const D = S.dealer; D.history.push({ shot: D.shot, res: +a.dataset.r }); dealNext(); dealerSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "dealer-skip") { dealNext(); render(); return; }
+    if (act === "dealer-undo") { const D = S.dealer; const h = D.history.pop(); if (h) D.shot = h.shot; dealerSave(); render(); return; }
+    if (act === "dealer-finish") { const D = S.dealer; D.finished = true; D.t1 = Date.now(); dealerSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "dealer-resume") { const D = S.dealer; D.finished = false; dealNext(); dealerSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "dealer-reset") { S.dealer = newDealer(); dealerSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "dealer-log") {
+      const D = S.dealer, sum = summarize(D.history), lvl = dealerLevel();
+      const area = { range: "Full swing", short: "Short game", putting: "Putting" }[D.place];
+      const mins = Math.max(1, Math.min(90, Math.round((D.t1 - D.t0) / 60000)));
+      draft.set(`${S.sid}.p-worked`, `Shot dealer (${SCHEDULES[lvl].name.toLowerCase()}), ${sum.total} shots\n` + bandLines(sum, D.place).join("\n"));
+      draft.set(`${S.sid}.p-min`, String(mins));
+      S.sess = { areas: AREA_NAMES.includes(area) ? [area] : [], rating: 0, dealer: { place: D.place, level: lvl, shots: sum.total, best: sum.best, points: sum.pts, bands: sum.bands.map(b => ({ band: b.band, n: b.n, best: b.best, close: b.close })) } };
+      S.dealer = newDealer(); dealerSave();
+      S.screen = "plan"; S.planWeek = null; S.practiceOpen = true; S.sheet = null; render();
+      const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
+      return;
+    }
     if (act === "game-ai") { tailor(); return; }
     if (act === "wedge-est") {
       const { wedges, count } = estimateWedges(S.wedgeDraft, myBag());
@@ -897,7 +967,7 @@ export function start(root, { students, onSignOut }) {
     }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();
-      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), ...(S.sess.week && S.sess.week !== "normal" ? { week: S.sess.week } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
+      const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), ...(S.sess.dealer ? { dealer: S.sess.dealer } : {}), ...(S.sess.week && S.sess.week !== "normal" ? { week: S.sess.week } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
       if (!d.worked && !d.went && !d.areas.length && d.minutes === "") { toast("Add what you practiced first."); return; }
       const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved. Karina will see it.");
       if (ok) { clearDrafts("practiceForm"); S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
