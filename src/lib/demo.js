@@ -38,6 +38,7 @@ add(S1, "lesson", { date: dayOffset(-26), kind: "Playing lesson", focus: "Wedge 
 { const card = [[4, 5, "R", "curve", ["S", "R"], "6 iron", 160, 2, 9], [3, 3, "", "", ["G"], "8 iron", 145, 2, 24], [5, 7, "R", "off", ["G"], "PW", 95, 3, 38], [4, 4, "fw", "", ["L"], "9 iron", 130, 1, 4]]
     .map(([par, score, res, start, app, club, yds, putts, fp], i) => ({ ...newHole(i + 1, par), score, putts, fp: String(fp), tee: { res, start, club: "Driver" }, app: { res: app, club, yds: String(yds) }, sg: { kind: "chip", shots: 1, land: app.includes("G") ? "" : "short", out: null }, ...(i === 2 ? { pen: 1, penFrom: "tee" } : {}) }));
   const t = totals(card); add(S1, "stat", { date: dayOffset(-2), event: "Casual", course: "Renaissance Park", ...t, holes: "9", mode: "full", card, patterns: patterns(card), notes: "Front 4 only" }, "student"); }
+add(S1, "bag", { clubs: [["Driver", 225, 240], ["3 wood", 205, 218], ["4 hybrid", 180, 188], ["6 iron", 160, 166], ["7 iron", 150, 156], ["8 iron", 140, 145], ["9 iron", 130, 134], ["PW", 118, 121], ["GW", 102, 104], ["SW", 82, 84]].map(([club, carry, total]) => ({ club, carry: String(carry), total: String(total), on: true })) }, "student");
 add(S1, "stat", { date: dayOffset(-10), event: "Casual", course: "Charlotte Golf Links", holes: "18", score: 87, fairways: "8/14", gir: 6, putts: 33 }, "student");
 add(S1, "stat", { date: dayOffset(-31), event: "Practice round", course: "Renaissance Park", holes: "18", score: 89, fairways: "7/14", gir: 5, putts: 34 });
 add(S1, "stat", { date: dayOffset(-52), event: "Casual", course: "Renaissance Park", holes: "18", score: 92, fairways: "6/14", gir: 4, putts: 36 });
@@ -90,6 +91,7 @@ export const demoApi = {
     await new Promise(r => setTimeout(r, 400));
     return { headline: `Solid ${p.round.score} with good driving; the short game cost you most.`, good: ["8 of 14 fairways, your best this month", "Only one penalty"], cost: ["3 three-putts ≈ 3 strokes", "Missed 4 of 5 up-and-downs from just off the green"], focus: "Chipping to a landing spot so your first putt is shorter.", game_id: "towel", mental: "You said you rushed after 12: take 3 breaths before the next tee.", at: new Date().toISOString() };
   },
+  async readBagPhoto() { await new Promise(r => setTimeout(r, 400)); return { clubs: [{ club: "Driver", carry: 215, total: 232 }, { club: "7i", carry: 148, total: 155 }, { club: "PW", carry: 112, total: 116 }, { club: "56°", carry: 85, total: 88 }] }; },
   async tailorSession(p) {
     await new Promise(r => setTimeout(r, 400));
     return { intro: "Your putting is close to target, but you're averaging 5 greens. Today is about solid contact into greens, then distance control.", games: p.games.map((g, i) => ({ id: g.id, target: i === 0 ? "8 / 18" : g.target, tip: i === 0 ? "Use your chair drill feel on the first 3 holes before you start counting." : "Write down the club you used for each miss." })) };

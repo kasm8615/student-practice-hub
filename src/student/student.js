@@ -3,6 +3,7 @@ import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
+import { newBag, estimateFrom7, mergeInto, sortBag, carried, gapNotes, clubsFor } from "../lib/bag.js";
 import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstats.js";
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
@@ -63,6 +64,8 @@ export function start(root, { students, onSignOut }) {
   };
   const byDateDesc = a => a.slice().sort((x, y) => String(y.date || y.created_at).localeCompare(String(x.date || x.created_at)));
   const goal = () => of("goal")[0] || null;
+  const bagEntry = () => of("bag")[0] || null;
+  const myBag = () => bagEntry()?.clubs || [];
   const sessions = () => byDateDesc(of("session"));
   const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - todayIndex()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const targetScore = () => {
@@ -268,7 +271,7 @@ export function start(root, { students, onSignOut }) {
         holes: Array.isArray(r.card) ? r.card.map(h => ({ n: h.n, par: h.par, score: h.score, putts: h.putts, first_putt_ft: h.fp, penalties: h.pen, penalty_from: h.penFrom, recovery: h.rec, tee: h.par >= 4 ? h.tee : undefined, approach: h.app, around_green: (h.app?.res || []).length && !h.app.res.includes("G") ? h.sg : undefined })) : null,
         previous: prev, target: targetScore(),
         benchmark: String(r.holes || "18") === "18" ? benchmark(targetScore()) : null,
-        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name) },
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, drills: of("drill").filter(d => d.status !== "Mastered").map(d => d.name), club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) },
         games: GAMES.map(x => ({ id: x.id, name: x.name, place: x.place, helps: x.helps }))
       });
       S.reviews[id] = { review: res };
@@ -313,10 +316,68 @@ export function start(root, { students, onSignOut }) {
       ${S.live ? `<section class="card live-resume"><h2>Round in progress</h2><p style="margin:0"><b>${esc(S.live.course || "Your round")}</b> · ${S.live.mode === "full" ? "Full" : "Quick"} · ${liveThru()}</p>
         <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
       ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
+      <button class="bag-link" data-go="bag"><span><b>My club distances</b><small>${carried(myBag()).length ? `${carried(myBag()).length} clubs · updated ${esc(shortDate(bagEntry().updated_at))}` : "Add how far you hit each club"}</small></span><span class="chev">›</span></button>
       <section class="card"><h2>Recent rounds</h2>${r.map(x => { const d = dateParts(x.date); return `<button class="round" data-round="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
         <span><span style="font-weight:600;display:block">${esc(x.course || x.event || "Round")}</span><span class="meta">${esc(x.event || "")} · ${esc(x.holes || "18")} holes${x.putts !== "" && x.putts != null ? ` · ${esc(x.putts)} putts` : ""}${x.fairways ? ` · FW ${esc(x.fairways)}` : ""}</span></span>
         <span class="sc">${esc(x.score)}</span></button>`; }).join("") || `<p class="muted">No rounds yet. Log your next one after you play.</p>`}</section></main>`;
   }
+  // ---------- club distances
+  function bagScreen() {
+    if (!S.bagDraft) S.bagDraft = sortBag(myBag().length ? myBag().map(c => ({ ...c })) : newBag());
+    const bag = S.bagDraft, e = bagEntry();
+    const c = carried(bag), max = c.length ? c[0].carry : 1;
+    const notes = gapNotes(bag);
+    return top("My bag", S.profile?.name || "") + `<main class="s-content">
+      <section class="card"><h2>Fill it in fast</h2>
+        <label class="btn primary photo-btn">${S.bagBusy ? "Reading your photo…" : "📷 Read from a photo"}<input type="file" accept="image/*" id="bagPhoto" hidden ${S.bagBusy ? "disabled" : ""}></label>
+        <p class="muted">A photo or screenshot of a launch monitor report, a yardage card, or a list you wrote. You check the numbers before saving.</p>
+        <div class="lv-row"><label>Or: my 7 iron carries <input class="lv-num" id="bag7" inputmode="numeric" placeholder="yds"></label><button class="btn" data-act="bag-est">Estimate the rest</button></div>
+      </section>
+      <form id="bagForm" class="card" novalidate><h2>Club distances <span>yards</span></h2>
+        <div class="bag-head"><span></span><span>Club</span><span>Carry</span><span>Total</span></div>
+        ${bag.map((r, i) => `<div class="bag-row ${r.on === false ? "off" : ""}">
+          <input type="checkbox" data-bagon="${i}" ${r.on !== false ? "checked" : ""} aria-label="${esc(r.club)} is in my bag">
+          <input class="bag-name" data-bag="${i}.club" value="${esc(r.club)}" aria-label="Club name">
+          <input class="lv-num" data-bag="${i}.carry" inputmode="numeric" value="${esc(r.carry)}" placeholder="–" aria-label="${esc(r.club)} carry">
+          <input class="lv-num" data-bag="${i}.total" inputmode="numeric" value="${esc(r.total)}" placeholder="–" aria-label="${esc(r.club)} total"></div>`).join("")}
+        <button type="button" class="linkbtn" data-act="bag-add">+ Add a club</button>
+        <p class="muted">Carry = where the ball lands. Total = where it stops. Untick clubs you don't carry. Use your normal, solid shot, not your best one.</p>
+        <button class="btn primary" type="submit">Save my bag</button>
+        ${e ? `<p class="muted" style="text-align:center">Last saved ${esc(shortDate(e.updated_at))}. Karina sees your distances.</p>` : ""}
+      </form>
+      ${c.length ? `<section class="card"><h2>Your gapping</h2><div class="gaps">${c.map(x => `<div class="gap-row"><span>${esc(x.club)}</span><i style="width:${Math.max(8, x.carry / max * 100)}%"></i><b>${x.carry}</b></div>`).join("")}</div>
+        ${notes.map(n => `<p class="gap-note">${esc(n)}</p>`).join("")}</section>` : ""}
+    </main>`;
+  }
+  const keepBag = () => draft.set(`${S.sid}.bagdraft`, S.bagDraft);
+  async function readBagPhoto(file) {
+    if (!file) return;
+    if (!S.aiAvailable) { toast("Photo reading isn't switched on yet. Type your distances instead."); return; }
+    S.bagBusy = true; render();
+    try {
+      const img = await shrinkImage(file, 1400);
+      const res = await api.readBagPhoto(img);
+      const { bag, count } = mergeInto(S.bagDraft || newBag(), res.clubs || []);
+      S.bagDraft = bag; keepBag();
+      toast(count ? `Found ${count} club${count > 1 ? "s" : ""}. Check the numbers, then Save.` : "Couldn't find club distances in that photo.");
+    } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't read that photo. Try a clearer one."); }
+    S.bagBusy = false; render();
+  }
+  // Downsizes a photo in the browser so it uploads fast.
+  function shrinkImage(file, maxSide) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(im.width, im.height));
+        const cv = document.createElement("canvas"); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+        cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+        resolve(cv.toDataURL("image/jpeg", 0.82).split(",")[1]);
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file isn't a photo the app can read.")); };
+      im.src = url;
+    });
+  }
+
   // ---------- hole-by-hole round tracker
   const liveKey = () => `${S.sid}.live`;
   const saveLive = () => draft.set(liveKey(), S.live);
@@ -359,6 +420,7 @@ export function start(root, { students, onSignOut }) {
         ${h.par >= 4 ? sec("Tee shot", `<div class="pick">${b("tee.res", "fw", "Fairway", h.tee.res === "fw")}${b("tee.res", "L", "← Left", h.tee.res === "L")}${b("tee.res", "R", "Right →", h.tee.res === "R")}${full ? clubSel("tee.club", h.tee.club) : ""}</div>
           ${full && (h.tee.res === "L" || h.tee.res === "R") ? `<div class="pick lv-start">${b("tee.start", "curve", "Started on target, curved away", h.tee.start === "curve")}${b("tee.start", "off", "Started off target, stayed there", h.tee.start === "off")}</div>` : ""}`) : ""}
         ${full ? sec(h.par === 3 ? "Tee shot (into the green)" : "Shot into the green", `<div class="lv-row"><label>Distance <input class="lv-num" data-lvin="app.yds" inputmode="numeric" value="${esc(h.app.yds)}" placeholder="yds"></label>${clubSel("app.club", h.app.club)}</div>
+          ${clubsFor(myBag(), h.app.yds).length ? `<p class="bag-hint">Your bag: ${clubsFor(myBag(), h.app.yds).map(c => `${esc(c.club)} ${c.carry}`).join(" · ")}</p>` : ""}
           <div class="pick">${b("app", "G", "On the green", h.app.res.includes("G"), "good")}${[["S", "Short"], ["Lg", "Long"], ["L", "Left"], ["R", "Right"]].map(([v, l]) => b("app", v, l, h.app.res.includes(v))).join("")}</div>
           <p class="muted">Missed? Tap up to two, e.g. Short + Right.</p>`) : ""}
         ${full && missedGreen ? sec("Around the green", `<div class="pick">${b("sg.kind", "chip", "Chip / pitch", h.sg.kind === "chip")}${b("sg.kind", "bunker", "Bunker", h.sg.kind === "bunker")}</div>
@@ -463,7 +525,7 @@ export function start(root, { students, onSignOut }) {
   }
   function nav() {
     const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", live: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -474,6 +536,7 @@ export function start(root, { students, onSignOut }) {
     if (sh.kind === "menu") {
       return wrap("Account", `<h2>${esc(S.profile?.name || "")}</h2>
         ${S.students.length > 1 ? `<p>Switch player</p>${S.students.map(s => `<button class="menu-item" data-switch="${esc(s.id)}" aria-current="${s.id === S.sid}">${esc(s.name)}<span>${s.id === S.sid ? "✓" : "›"}</span></button>`).join("")}` : ""}
+        <button class="menu-item" data-go="bag">My club distances<span>›</span></button>
         <p>Tip: add this app to your home screen. On iPhone, tap Share, then "Add to Home Screen".</p>
         <button class="btn" data-act="signout">Sign out</button><button class="btn" data-close="1">Close</button>`);
     }
@@ -542,7 +605,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, games: gamesScreen, live: liveScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, live: liveScreen, bag: bagScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -583,13 +646,13 @@ export function start(root, { students, onSignOut }) {
       const res = await api.tailorSession({
         place: S.game.place, minutes: S.game.minutes, focus, week: S.game.week, days_to_tournament: S.game.week === "tournament" ? daysOut() : null,
         games: games.map(x => ({ id: x.id, name: x.name, setup: x.setup, score: x.score, target: x.pass[levelOf(S.profile?.handicap)] })),
-        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent }
+        player: { handicap: S.profile?.handicap || "", group: S.profile?.grp || "", goals: g.m3 || {}, averages: mine, drills, recent, club_carries: carried(myBag()).map(c => `${c.club} ${c.carry}`) }
       });
       S.game.ai = { ...res, key: sessionKey(games) };
     } catch (err) { toast(err?.message && !/fetch/i.test(err.message) ? err.message : "Couldn't tailor right now. The games still work as they are."); }
     S.game.aiBusy = false; render();
   }
-  function go(screen) { if (screen === "plan" && S.screen !== "plan") S.planWeek = null; S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
+  function go(screen) { if (screen === "plan" && S.screen !== "plan") S.planWeek = null; if (screen === "bag" && S.screen !== "bag") S.bagDraft = draft.get(`${S.sid}.bagdraft`); S.screen = screen; S.logOpen = false; S.practiceOpen = false; S.sheet = null; render(); window.scrollTo(0, 0); }
   function openScore(entryId, drillId) {
     const p = S.entries.find(e => e.id === entryId);
     const dr = drillById(drillId || p?.drill);
@@ -640,6 +703,13 @@ export function start(root, { students, onSignOut }) {
     if (act === "game-shuffle") { S.game.seed++; S.game.ai = null; S.game.pin = null; render(); window.scrollTo(0, 0); return; }
     if (act === "game-log") { logGames(); return; }
     if (act === "game-ai") { tailor(); return; }
+    if (act === "bag-est") {
+      const v = +root.querySelector("#bag7").value;
+      if (!(v >= 60 && v <= 250)) { toast("Type your 7-iron carry first, e.g. 140."); return; }
+      const { bag } = mergeInto(S.bagDraft, estimateFrom7(v), { onlyEmpty: true });
+      S.bagDraft = bag; keepBag(); toast("Estimated. Now fix any club you know better, then Save."); render(); return;
+    }
+    if (act === "bag-add") { S.bagDraft.push({ club: "", carry: "", total: "", on: true }); render(); root.querySelector(".bag-row:last-of-type .bag-name")?.focus(); return; }
     if (act === "live-new") { S.liveSetup = { course: "", date: today(), event: "Casual", holes: "18", mode: "quick" }; S.screen = "live"; S.sheet = null; render(); window.scrollTo(0, 0); return; }
     if (act === "live-start") {
       const st = S.liveSetup; st.course = root.querySelector("#lv-course").value.trim(); st.date = root.querySelector("#lv-date").value || today(); st.event = root.querySelector("#lv-event").value;
@@ -698,6 +768,10 @@ export function start(root, { students, onSignOut }) {
     }
   };
   root.onchange = async e => {
+    if (e.target.id === "bagPhoto") { readBagPhoto(e.target.files[0]); e.target.value = ""; return; }
+    if (e.target.dataset?.bagon != null && S.bagDraft) { S.bagDraft[+e.target.dataset.bagon].on = e.target.checked; keepBag(); render(); return; }
+    if (e.target.dataset?.bag && S.bagDraft && e.target.dataset.bag.endsWith("carry")) { render(); return; }
+    if (e.target.dataset?.lvin === "app.yds" && S.live) { render(); return; }
     if (e.target.dataset?.lvsel && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvsel, e.target.value); saveLive(); return; }
     const id = e.target.dataset?.task;
     if (!id) return;
@@ -722,6 +796,14 @@ export function start(root, { students, onSignOut }) {
       }
     }
     if (e.target.id === "liveForm") { await liveSave(); return; }
+    if (e.target.id === "bagForm") {
+      const clubs = sortBag(S.bagDraft.filter(c => c.club.trim()).map(c => ({ club: c.club.trim(), carry: c.carry, total: c.total, on: c.on !== false })));
+      if (!clubs.some(c => +c.carry > 0)) { toast("Add at least one carry distance."); return; }
+      const e0 = bagEntry();
+      const ok = await run(() => e0 ? api.updateEntry(e0, { clubs }) : api.addEntry(S.sid, "bag", { clubs }), "Bag saved");
+      if (ok) { draft.clear(`${S.sid}.bagdraft`); S.bagDraft = null; render(); }
+      return;
+    }
     if (e.target.id === "practiceForm") {
       const f = k => root.querySelector("#p-" + k).value.trim();
       const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), ...(S.sess.week && S.sess.week !== "normal" ? { week: S.sess.week } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
@@ -754,6 +836,7 @@ export function start(root, { students, onSignOut }) {
   root.oninput = e => {
     const id = e.target.id || "";
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
+    if (e.target.dataset?.bag && S.bagDraft) { const [i, k] = e.target.dataset.bag.split("."); S.bagDraft[+i][k] = k === "club" ? e.target.value : e.target.value.replace(/[^0-9]/g, ""); keepBag(); }
     if (e.target.dataset?.lvin && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvin, e.target.value.replace(/[^0-9]/g, "")); saveLive(); }
     if (id === "lv-notes" && S.live) { S.live.notes = e.target.value; saveLive(); }
     if (id === "g-tdate") { S.game.tdate = e.target.value; S.game.seed = 0; saveWeek(); render(); }

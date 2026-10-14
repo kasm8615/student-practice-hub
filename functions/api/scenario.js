@@ -2,6 +2,7 @@
 // GET  -> { ai: true|false } whether AI tailoring is switched on
 // POST -> tailors a practice session (games chosen in the app from the library) to one student, using Claude.
 // POST {kind:"review"} -> reviews one logged round and recommends one library game.
+// POST {kind:"bag-photo", image} -> reads club distances from a photo (launch monitor report, yardage card, handwritten list).
 //
 // Cloudflare variables (Settings → Variables and Secrets):
 //   ANTHROPIC_API_KEY  (secret) – from console.anthropic.com. Leave unset to turn the feature off.
@@ -85,6 +86,25 @@ async function review(p, env) {
   });
 }
 
+const BAG_SYSTEM = `You read golf club distances from a photo: a launch monitor report, a yardage card, an app screenshot or a handwritten list.
+Return every club you can read with its CARRY and TOTAL distance in yards. If the photo shows meters, convert to yards (× 1.094). If there are several shots per club, use the average. If only one distance is shown per club, treat it as carry.
+Use these club names when they fit: Driver, 3 wood, 5 wood, 7 wood, 3 hybrid, 4 hybrid, 5 hybrid, 4 iron, 5 iron, 6 iron, 7 iron, 8 iron, 9 iron, PW, GW, SW, LW. Wedges given by loft: 46–48° = PW, 50–52° = GW, 54–56° = SW, 58–60° = LW. Skip the putter.
+Only include numbers you can actually read. If the photo has no club distances, return an empty list.
+Reply with JSON only: {"clubs":[{"club":"7 iron","carry":150,"total":158}]}`;
+
+async function bagPhoto(p, env) {
+  const img = String(p.image || "");
+  if (!img || img.length > 4_000_000 || !/^[A-Za-z0-9+/=]+$/.test(img.slice(0, 200))) return json({ error: "That photo is too big or not readable. Try a screenshot." }, 400);
+  const out = await claude(env, BAG_SYSTEM, [
+    { type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } },
+    { type: "text", text: "Read the club distances from this photo." }
+  ], 800);
+  if (!out) return json({ error: "Couldn't read that photo. Try a clearer one." }, 502);
+  const num = v => { const n = Math.round(+v); return n > 0 && n < 450 ? n : ""; };
+  const clubs = (Array.isArray(out.clubs) ? out.clubs : []).slice(0, 20).map(c => ({ club: clip(c.club, 30), carry: num(c.carry), total: num(c.total) })).filter(c => c.club && (c.carry || c.total));
+  return json({ clubs });
+}
+
 export async function onRequestGet({ env }) {
   return json({ ai: !!env.ANTHROPIC_API_KEY });
 }
@@ -96,6 +116,7 @@ export async function onRequestPost({ request, env }) {
   let p;
   try { p = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
   if (p.kind === "review") return review(p, env);
+  if (p.kind === "bag-photo") return bagPhoto(p, env);
   const games = (Array.isArray(p.games) ? p.games : []).slice(0, 4).map(g => ({
     id: clip(g.id, 40), name: clip(g.name, 80), setup: clip(g.setup, 300), score: clip(g.score, 160), target: clip(g.target, 40)
   }));

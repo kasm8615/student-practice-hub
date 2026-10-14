@@ -22,13 +22,17 @@ export function dateParts(d) {
   const [y, m, dd] = d.split("-");
   return { d: String(+dd), m: MONTHS[+m - 1] + " " + y.slice(2), mon: MONTHS[+m - 1] };
 }
+// Timestamps (with a time) are shown in the viewer's local date, not UTC.
+const localDay = d => { if (!/T/.test(d)) return d; const x = new Date(d); return isNaN(x) ? d : `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
 export function fmtDate(d) {
   if (!d) return "";
+  d = localDay(String(d));
   const p = d.slice(0, 10).split("-");
   return `${MONTHS[+p[1] - 1]} ${+p[2]}, ${p[0]}`;
 }
 export function shortDate(d) {
   if (!d) return "";
+  d = localDay(String(d));
   const p = d.slice(0, 10).split("-");
   return `${MONTHS[+p[1] - 1]} ${+p[2]}`;
 }

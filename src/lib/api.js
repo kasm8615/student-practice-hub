@@ -71,6 +71,7 @@ export const api = {
     return !!(await res.json().catch(() => ({}))).ai;
   },
   async reviewRound(payload) { return this.tailorSession({ kind: "review", ...payload }); },
+  async readBagPhoto(base64) { return this.tailorSession({ kind: "bag-photo", image: base64 }); },
   async tailorSession(payload) {
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     const res = await fetch("/api/scenario", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(payload) });

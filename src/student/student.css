@@ -222,3 +222,22 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .week-nav small{font-size:12px;color:var(--ink-3)}
 .card.is-today{border:2px solid var(--pine)}
 .week-card h2 span{color:var(--hero-ink)}
+/* my bag */
+.bag-link{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 16px;text-align:left;width:100%}
+.bag-link b{display:block}
+.bag-link small{color:var(--ink-3);font-size:12px}
+.photo-btn{text-align:center;cursor:pointer}
+.bag-head,.bag-row{display:grid;grid-template-columns:26px 1fr 72px 72px;gap:8px;align-items:center}
+.bag-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
+.bag-head span:nth-child(n+3){text-align:center}
+.bag-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--pine)}
+.bag-name{border:1px solid transparent;background:transparent;border-radius:8px;padding:8px 6px;font-size:15px;font-weight:600;min-width:0;color:var(--ink)}
+.bag-name:focus{border-color:var(--line);background:var(--surface-2)}
+.bag-row .lv-num{width:100%}
+.bag-row.off .bag-name,.bag-row.off .lv-num{opacity:.4}
+.gaps{display:flex;flex-direction:column;gap:5px}
+.gap-row{display:grid;grid-template-columns:72px 1fr 36px;gap:8px;align-items:center;font-size:13px}
+.gap-row i{display:block;height:12px;border-radius:6px;background:var(--pine)}
+.gap-row b{font-family:var(--mono);font-weight:500;text-align:right}
+.gap-note{margin:0;font-size:13px;background:var(--warn-soft);border-radius:10px;padding:8px 12px}
+.bag-hint{margin:0;font-size:13px;color:var(--pine);font-weight:600}
