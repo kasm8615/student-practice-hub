@@ -68,9 +68,13 @@ Videos upload straight from a phone to Mux, which converts them so they play on 
 2. Cloudflare → student-practice-hub → **Settings → Variables and Secrets** → add, as type **Secret**:
    - `MUX_TOKEN_ID` = the Access Token ID
    - `MUX_TOKEN_SECRET` = the Secret Key
-3. Redeploy (any new push to GitHub does it).
+3. Videos are **private** (signed playback). mux.com → **Settings → Signing Keys → Generate new key** (environment **Production**). Add two more Cloudflare secrets:
+   - `MUX_SIGNING_KEY_ID` = the key's ID
+   - `MUX_SIGNING_PRIVATE_KEY` = the private key, pasted exactly as Mux shows it
+4. Redeploy (any new push to GitHub does it).
 
 The upload endpoint is `functions/api/video.js`. Only signed-in coaches and invited students can create uploads.
+Playback goes through `functions/api/play.js`, which hands out links that expire (thumbnails after 1 hour, video after 6) and only for videos the signed-in person can see. Videos uploaded before this change are public until they are re-uploaded or deleted in Mux.
 
 ## Email alerts when students post
 

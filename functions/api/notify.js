@@ -12,7 +12,8 @@
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const APP = "https://app.karinagolfcoaching.com";
 const quote = t => `<p style="font-size:16px;background:#F2F7FC;border-left:4px solid #4B9CD3;padding:10px 14px;margin:16px 0;white-space:pre-wrap">${esc(t)}</p>`;
-const thumb = pid => `<p><img src="https://image.mux.com/${encodeURIComponent(pid)}/thumbnail.jpg?width=480" width="320" alt="Video" style="border-radius:10px;max-width:100%"></p>`;
+// Videos are private, so emails never include a picture or link to the video itself.
+const thumb = () => `<p style="font-size:16px;margin:16px 0">\u{1F4F9} A video is waiting in the app.</p>`;
 const facts = bits => `<p style="font-size:16px;margin:16px 0">${bits.filter(([, v]) => v !== "" && v != null && !(Array.isArray(v) && !v.length)).map(([k, v]) => `<b>${k}:</b> ${esc(Array.isArray(v) ? v.join(", ") : v)}`).join(" &nbsp;·&nbsp; ")}</p>`;
 const RATING = ["", "Rough", "Meh", "OK", "Good", "Great"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
