@@ -84,6 +84,14 @@ Karina gets an email when a student sends a note, a swing video or logs a round.
 2. Make up a long random string → Cloudflare secret `NOTIFY_SECRET`.
 3. Supabase SQL Editor → run `supabase/notify.sql` with `PASTE_NOTIFY_SECRET` replaced by that same string.
 4. Redeploy. The endpoint is `functions/api/notify.js`.
+5. Run `supabase/update-5.sql` (no values to replace). It makes the database send only the id of the new entry, and `/api/notify` looks up the real recipients and text itself. A leaked `NOTIFY_SECRET` can then only re-send emails that already exist, not email arbitrary people. Run it right after deploying; alert emails may skip for a minute or two in between.
+
+To replace the secret: make up a new long random string, update Cloudflare `NOTIFY_SECRET`, and run `update private.settings set value = 'NEW_SECRET' where key = 'notify_secret';` in the Supabase SQL Editor. Redeploy.
+
+## Sign-in security
+
+- Sign-in codes should expire in 10 minutes: Supabase → Authentication → Providers (or Sign In / Providers) → Email → **Email OTP Expiration** → `600`.
+- The sign-in screen shows the same message whether or not an email is on Karina's list.
 
 ## Update 2: goals, practice log, emails to students
 

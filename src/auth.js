@@ -1,5 +1,5 @@
 import { api } from "./lib/store.js";
-import { esc, friendly, logo } from "./lib/util.js";
+import { esc, friendly, isNotInvited, logo } from "./lib/util.js";
 import { quoteOfTheDay } from "./lib/quotes.js";
 
 // Two screens: enter email, then enter the code from the email.
@@ -31,7 +31,12 @@ export function showSignIn(root, onSignedIn) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error = "Enter a full email address, like name@email.com."; emailScreen(); return; }
       busy = true; error = ""; emailScreen();
       try { await api.sendCode(email); busy = false; codeScreen(); }
-      catch (err) { busy = false; error = friendly(err); emailScreen(); }
+      catch (err) {
+        busy = false;
+        // Same screen whether or not the email is on the list, so the app never reveals who is invited.
+        if (isNotInvited(err)) { codeScreen(); return; }
+        error = friendly(err); emailScreen();
+      }
     });
   }
 
@@ -43,7 +48,7 @@ export function showSignIn(root, onSignedIn) {
         <input id="code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••••" required>
         ${error ? `<p class="err" role="alert">${esc(error)}</p>` : ""}
         <button class="big" type="submit" ${busy ? "disabled" : ""}>${busy ? "Signing in…" : "Sign in"}</button>
-        <p class="hint">Enter the code from the email, or just tap the sign-in link in it. Can't find it? Check your spam folder.</p>
+        <p class="hint">If this email is on Karina's list, a code is on its way. Enter it here, or just tap the sign-in link in the email. Can't find it? Check your spam folder.</p>
         <button class="linkbtn" type="button" id="resend">Send a new code</button>
         <button class="linkbtn" type="button" id="back">Use a different email</button>
       </form>`
@@ -53,7 +58,10 @@ export function showSignIn(root, onSignedIn) {
     root.querySelector("#back").onclick = () => { error = ""; emailScreen(); };
     root.querySelector("#resend").onclick = async () => {
       try { await api.sendCode(email); error = ""; codeScreen(); root.querySelector(".hint").textContent = "New code sent."; }
-      catch (err) { error = friendly(err); codeScreen(); }
+      catch (err) {
+        if (isNotInvited(err)) { error = ""; codeScreen(); root.querySelector(".hint").textContent = "New code sent."; return; }
+        error = friendly(err); codeScreen();
+      }
     };
     root.querySelector("#codeForm").addEventListener("submit", async e => {
       e.preventDefault();

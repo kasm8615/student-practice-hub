@@ -72,9 +72,13 @@ export function toast(msg) {
 }
 
 // Turns Supabase errors into sentences a coach or student can act on.
+// True when sign-in failed only because the email isn't on Karina's list.
+// The sign-in screen treats this exactly like success, so nobody can use it to find out who is invited.
+export const isNotInvited = err => /not_invited|Database error saving new user|Signups not allowed/i.test(String(err?.message || err || ""));
+
 export function friendly(err) {
   const m = String(err?.message || err || "");
-  if (/not_invited|Database error saving new user|Signups not allowed/i.test(m)) return "That email isn't on Karina's list yet. Check the spelling, or ask Karina to add you.";
+  if (isNotInvited(err)) return "That didn't work. Check your email and code, or ask Karina.";
   if (/rate limit|too many/i.test(m)) return "Too many tries. Wait a minute and try again.";
   if (/expired|invalid.*(otp|token)|Token has expired/i.test(m)) return "That code didn't work. Check it, or send a new one.";
   if (/row-level security|not_allowed/i.test(m)) return "You don't have permission to change that.";
