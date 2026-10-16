@@ -3,10 +3,13 @@
 //   direction "to_coach"   – a student sent a note or video, logged a round or practice, or set goals
 //   direction "to_student" – the coach sent a note or video, or logged a lesson
 // Sends the email through Resend.
+// The database only sends the id of the new entry; we ask it (using the shared secret) for the real
+// recipients and text, so a leaked secret can only re-send emails that already exist (see supabase/update-5.sql).
 //
 // Cloudflare variables (Settings → Variables and Secrets), type Secret:
 //   RESEND_API_KEY  – a Resend API key with sending access
 //   NOTIFY_SECRET   – the same random string saved in supabase/notify.sql
+//   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  – already set for the app
 // Optional: COACH_EMAIL (defaults to karina@karinagolfcoaching.com)
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -61,14 +64,35 @@ function toStudent(p) {
   return null;
 }
 
+const sameSecret = (a, b) => {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+};
+
 export async function onRequestPost({ request, env }) {
-  if (!env.NOTIFY_SECRET || request.headers.get("x-notify-secret") !== env.NOTIFY_SECRET) {
+  if (!env.NOTIFY_SECRET || !sameSecret(request.headers.get("x-notify-secret"), env.NOTIFY_SECRET)) {
     return new Response("Forbidden", { status: 403 });
   }
   if (!env.RESEND_API_KEY) return new Response("Resend key missing", { status: 503 });
 
-  let p;
-  try { p = await request.json(); } catch { return new Response("Bad request", { status: 400 }); }
+  let body;
+  try { body = await request.json(); } catch { return new Response("Bad request", { status: 400 }); }
+  const entryId = String(body?.entry_id || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entryId)) return new Response("Bad request", { status: 400 });
+
+  // Look up who to email and what to say from the database itself, never from the request.
+  const base = String(env.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const anon = String(env.VITE_SUPABASE_ANON_KEY || "").trim();
+  const look = await fetch(`${base}/rest/v1/rpc/notify_payload`, {
+    method: "POST",
+    headers: { apikey: anon, authorization: `Bearer ${anon}`, "content-type": "application/json" },
+    body: JSON.stringify({ p_secret: env.NOTIFY_SECRET, p_entry: entryId })
+  });
+  if (!look.ok) return new Response("Lookup failed", { status: 502 });
+  const p = await look.json();
+  if (!p) return new Response("Ignored", { status: 200 });
   const coach = env.COACH_EMAIL || "karina@karinagolfcoaching.com";
   const toStu = p.direction === "to_student";
   const msg = toStu ? toStudent(p) : toCoach(p);
