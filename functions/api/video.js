@@ -41,7 +41,7 @@ export async function onRequestPost({ request, env }) {
     method: "POST",
     body: JSON.stringify({
       cors_origin: origin,
-      new_asset_settings: { playback_policy: ["public"], video_quality: "basic", max_resolution_tier: "1080p" }
+      new_asset_settings: { playback_policy: ["signed"], video_quality: "basic", max_resolution_tier: "1080p" }
     })
   });
   if (!res.ok) return json({ error: "Couldn't start the upload. Try again." }, 502);
@@ -62,6 +62,6 @@ export async function onRequestGet({ request, env }) {
   const as = await mux(env, `/video/v1/assets/${upload.asset_id}`);
   if (!as.ok) return json({ status: "processing" });
   const asset = (await as.json()).data;
-  const pid = (asset.playback_ids || []).find(p => p.policy === "public")?.id;
+  const pid = (asset.playback_ids || []).find(p => p.policy === "signed")?.id;
   return json({ status: asset.status === "ready" ? "ready" : asset.status === "errored" ? "errored" : "processing", playbackId: pid || null, duration: asset.duration || null });
 }

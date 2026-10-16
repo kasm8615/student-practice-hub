@@ -90,6 +90,7 @@ export const demoApi = {
   async deleteScore(id) { db.scores = db.scores.filter(s => s.id !== id); ping(); },
   async videoStart() { throw new Error("Video uploads don't work in the preview."); },
   async videoStatus() { return { status: "errored" }; },
+  async videoTokens(pids) { return Object.fromEntries(pids.map(p => [p, { signed: false }])); },
   async tailorAvailable() { return true; },
   async reviewRound(p) {
     await new Promise(r => setTimeout(r, 400));

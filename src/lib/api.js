@@ -64,6 +64,15 @@ export const api = {
     return res.json().catch(() => ({ status: "unknown" }));
   },
 
+  // Short-lived tokens to watch private videos (see functions/api/play.js).
+  async videoTokens(pids) {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const res = await fetch("/api/play", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ pids }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Couldn't load the video.");
+    return body.tokens || {};
+  },
+
   // ---- AI-tailored practice games (through the /api/scenario function)
   async tailorAvailable() {
     const res = await fetch("/api/scenario");

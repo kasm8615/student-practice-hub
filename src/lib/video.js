@@ -4,13 +4,40 @@ import { esc } from "./util.js";
 
 const MAX_BYTES = 1024 * 1024 * 1024; // 1 GB
 
-export const thumbUrl = pid => `https://image.mux.com/${encodeURIComponent(pid)}/thumbnail.jpg?width=480&fit_mode=smartcrop&time=1`;
+// Videos are private (signed). We ask the server for short-lived tokens, only for videos this person may see.
+const tokenCache = new Map(); // pid -> { signed, video, thumb, videoExp, thumbExp }
+const pending = new Map();    // pid -> promise while a request is in flight
+
+async function loadTokens(pids) {
+  const soon = Date.now() + 5 * 60 * 1000; // refresh anything expiring within 5 minutes
+  const need = [...new Set(pids)].filter(p => { const t = tokenCache.get(p); return !t || (t.signed && (t.thumbExp < soon || t.videoExp < soon)); });
+  const fresh = need.filter(p => !pending.has(p));
+  if (fresh.length) {
+    const req = api.videoTokens(fresh).then(map => { fresh.forEach(p => tokenCache.set(p, map[p] || { signed: false, denied: true })); }).catch(() => {}).finally(() => fresh.forEach(p => pending.delete(p)));
+    fresh.forEach(p => pending.set(p, req));
+  }
+  await Promise.all(need.map(p => pending.get(p)).filter(Boolean));
+}
+
+const thumbSrc = (pid, t) => `https://image.mux.com/${encodeURIComponent(pid)}/thumbnail.jpg?width=480&fit_mode=smartcrop&time=1${t?.signed ? `&token=${encodeURIComponent(t.thumb)}` : ""}`;
+const streamSrc = (pid, t) => `https://stream.mux.com/${encodeURIComponent(pid)}.m3u8${t?.signed ? `?token=${encodeURIComponent(t.video)}` : ""}`;
+
+// Fills in every thumbnail on the page that is waiting for its token.
+async function hydrateThumbs(root) {
+  const imgs = [...root.querySelectorAll("img[data-thumb-pid]:not([src])")];
+  if (!imgs.length) return;
+  await loadTokens(imgs.map(i => i.dataset.thumbPid));
+  imgs.forEach(img => {
+    const t = tokenCache.get(img.dataset.thumbPid);
+    if (t && !t.denied && !img.getAttribute("src")) img.src = thumbSrc(img.dataset.thumbPid, t);
+  });
+}
 
 // A tappable thumbnail. Any element with data-play opens the player (see bindPlayer).
 export function videoThumb(pid, label = "Watch video") {
   if (!pid) return "";
   return `<button type="button" class="vthumb" data-play="${esc(pid)}" aria-label="${esc(label)}">
-    <img src="${thumbUrl(pid)}" alt="" loading="lazy" onerror="this.style.opacity=0"><span class="vplay" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg></span><span class="vlabel">${esc(label)}</span></button>`;
+    <img data-thumb-pid="${esc(pid)}" alt="" loading="lazy" onerror="this.style.opacity=0"><span class="vplay" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg></span><span class="vlabel">${esc(label)}</span></button>`;
 }
 
 // Full-screen player, loaded only when someone presses play.
@@ -25,10 +52,13 @@ export async function openPlayer(pid) {
   wrap.addEventListener("click", e => { if (e.target === wrap || e.target.closest(".vclose")) close(); });
   const stage = wrap.querySelector(".vstage");
   const say = msg => { stage.innerHTML = `<p class="vmsg">${esc(msg)}</p>`; };
+  await loadTokens([pid]);
+  const t = tokenCache.get(pid);
+  if (!t || t.denied) { say("You can't watch this video, or it isn't available right now."); return; }
   // Ask Mux whether the video is ready before loading the player.
   let ready = true;
   try {
-    const r = await fetch(`https://stream.mux.com/${encodeURIComponent(pid)}.m3u8`, { method: "GET", cache: "no-store" });
+    const r = await fetch(streamSrc(pid, t), { method: "GET", cache: "no-store" });
     if (r.status === 412 || r.status === 404) ready = false;
   } catch { /* network hiccup: try the player anyway */ }
   if (!ready) { say("This video is still processing. Try again in a few minutes."); return; }
@@ -36,8 +66,8 @@ export async function openPlayer(pid) {
   const native = () => {
     const v = document.createElement("video");
     v.controls = true; v.playsInline = true; v.autoplay = true; v.preload = "auto";
-    v.src = `https://stream.mux.com/${encodeURIComponent(pid)}.m3u8`;
-    v.poster = thumbUrl(pid);
+    v.src = streamSrc(pid, t);
+    v.poster = thumbSrc(pid, t);
     v.style.width = "100%"; v.style.maxHeight = "80vh"; v.style.background = "#000";
     v.onerror = () => say("This video can't play on this device. Try opening the app in Safari or Chrome, or on another phone.");
     stage.replaceChildren(v);
@@ -47,6 +77,7 @@ export async function openPlayer(pid) {
     await import("@mux/mux-player");
     const p = document.createElement("mux-player");
     p.setAttribute("playback-id", pid);
+    if (t.signed) { p.setAttribute("playback-token", t.video); p.setAttribute("thumbnail-token", t.thumb); }
     p.setAttribute("stream-type", "on-demand");
     p.setAttribute("accent-color", "#4B9CD3");
     p.setAttribute("playsinline", "");
@@ -70,6 +101,11 @@ export async function openPlayer(pid) {
 
 // Call once per app root: any [data-play] click opens the player.
 export function bindPlayer(root) {
+  // Thumbnails are drawn without a picture address; this adds it as soon as the token arrives.
+  let queued = false;
+  const queue = () => { if (queued) return; queued = true; queueMicrotask(() => { queued = false; hydrateThumbs(root); }); };
+  new MutationObserver(queue).observe(root, { childList: true, subtree: true });
+  queue();
   root.addEventListener("click", e => {
     const b = e.target.closest("[data-play]");
     if (!b) return;
