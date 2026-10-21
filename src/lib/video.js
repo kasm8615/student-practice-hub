@@ -1,6 +1,7 @@
 // Video upload and playback, shared by the coach view and the student app.
 import { api } from "./store.js";
 import { esc } from "./util.js";
+import { bindFiles } from "./files.js";
 
 const MAX_BYTES = 1024 * 1024 * 1024; // 1 GB
 
@@ -99,7 +100,7 @@ export async function openPlayer(pid) {
   }
 }
 
-// Call once per app root: any [data-play] click opens the player.
+// Call once per app root: any [data-play] click opens the player. Also wires up picture and PDF attachments.
 export function bindPlayer(root) {
   // Thumbnails are drawn without a picture address; this adds it as soon as the token arrives.
   let queued = false;
@@ -112,12 +113,30 @@ export function bindPlayer(root) {
     e.preventDefault(); e.stopPropagation();
     openPlayer(b.dataset.play);
   }, true);
+  bindFiles(root);
+}
+
+// Length of a video file in seconds, read on the phone before anything is uploaded (null if unknown).
+function videoSeconds(file) {
+  return new Promise(resolve => {
+    const v = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    v.preload = "metadata";
+    v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(Number.isFinite(v.duration) ? v.duration : null); };
+    v.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    v.src = url;
+  });
 }
 
 // Uploads a file and waits until Mux can play it. onState(text, percent) reports progress.
-export async function uploadVideo(file, onState) {
+// maxSeconds (optional) refuses longer videos before they are uploaded.
+export async function uploadVideo(file, onState, { maxSeconds } = {}) {
   if (!file.type.startsWith("video/")) throw new Error("That file isn't a video.");
   if (file.size > MAX_BYTES) throw new Error("That video is over 1 GB. Trim it on your phone first.");
+  if (maxSeconds) {
+    const len = await videoSeconds(file);
+    if (len && len > maxSeconds) throw new Error(`That video is ${Math.round(len)} seconds long. Videos can be up to ${maxSeconds} seconds. Trim it on your phone and try again.`);
+  }
   onState("Starting upload…", 0);
   const { uploadId, url } = await api.videoStart();
   await new Promise((resolve, reject) => {
@@ -134,6 +153,7 @@ export async function uploadVideo(file, onState) {
   while (Date.now() - started < 5 * 60 * 1000) {
     await new Promise(r => setTimeout(r, 2500));
     const st = await api.videoStatus(uploadId);
+    if (st.status === "too_long") throw new Error(`That video is over ${maxSeconds || 30} seconds. Trim it on your phone and try again.`);
     if (st.playbackId) pid = st.playbackId;
     if (st.status === "ready" && pid) return pid;
     if (st.status === "errored") throw new Error("Mux couldn't process that video. Try a different file.");
@@ -144,7 +164,7 @@ export async function uploadVideo(file, onState) {
 
 // A form control: current video (if any), an upload button and a remove button.
 // Returns a controller with .value (playback id or "") and .busy.
-export function videoField(container, initialPid, { label = "Upload video" } = {}) {
+export function videoField(container, initialPid, { label = "Upload video", maxSeconds } = {}) {
   const ctl = { value: initialPid || "", busy: false };
   const id = "vf-" + Math.random().toString(36).slice(2, 8);
   function render(state) {
@@ -161,7 +181,7 @@ export function videoField(container, initialPid, { label = "Upload video" } = {
       if (!f) return;
       ctl.busy = true;
       try {
-        ctl.value = await uploadVideo(f, (text, pct) => render({ text, pct }));
+        ctl.value = await uploadVideo(f, (text, pct) => render({ text, pct }), { maxSeconds });
         ctl.busy = false; render();
       } catch (err) {
         ctl.busy = false; render();
