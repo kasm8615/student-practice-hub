@@ -25,7 +25,7 @@ export function trendHtml(rounds, opt) {
     <div class="tr-row">${chip("trn", [[5, "Last 5"], [10, "Last 10"]], n)}${has9 && has18 ? chip("trholes", [["18", "18 holes"], ["9", "9 holes"]], holes) : ""}</div>
     ${chip("trmetric", TREND_METRICS, metric)}</div>`;
   if (pts.length < 2) {
-    return controls + `<p class="muted tr-empty">${pts.length ? "One round so far" : "No rounds"} for this choice. Log ${pts.length ? "one more" : "two or more"} ${type === "Tournament" ? "tournament " : type === "practice" ? "practice or casual " : ""}${holes}-hole rounds${metric !== "score" ? ` with ${label.toLowerCase()}` : ""} to see the trend.</p>`;
+    return controls + `<p class="muted tr-empty">${pts.length ? "One round so far" : "No rounds"} for this choice. Log ${pts.length ? "one more" : "two or more"} ${type === "Tournament" ? "tournament " : type === "practice" ? "practice or casual " : ""}${holes}-hole ${pts.length ? "round" : "rounds"}${metric !== "score" ? ` with ${label.toLowerCase()}` : ""} to see the trend.</p>`;
   }
   const ys = pts.map(p => +p[metric]);
   const avg = ys.reduce((a, b) => a + b, 0) / ys.length;
@@ -55,5 +55,29 @@ export function trendHtml(rounds, opt) {
         <text x="${x(i)}" y="${y(+p[metric]) - 9}" text-anchor="middle" class="tr-val">${esc(p[metric])}</text>
         ${pts.length <= 6 || i % 2 === (pts.length - 1) % 2 ? `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" class="tr-ax">${esc(shortDate(p.date))}</text>` : ""}`).join("")}
     </svg>
-    <p class="tr-key"><span class="k-line"></span>${esc(label)} <span class="k-avg"></span>Average${type === "all" ? ` <span class="k-t"></span>Tournament` : ""}<span style="margin-left:auto">${lowerBetter ? "Better is higher on the chart" : "Higher is better"}</span></p>`;
+    <p class="tr-key"><span class="k-line"></span>${esc(label)} <span class="k-avg"></span>Average${type === "all" ? ` <span class="k-t"></span>Tournament` : ""}<span style="margin-left:auto">${lowerBetter ? "Better is higher on the chart" : "Higher is better"}</span></p>` + glanceHtml(rounds, opt);
+}
+
+// Small side-by-side charts (Score, Putts, Greens) for the same filters: the metric is bold, the other two are faded.
+function glanceHtml(rounds, { type = "all", n = 5, holes = "18" }) {
+  const W = 100, H = 56, L = 8, R = 8, T = 8, B = 8;
+  const series = TREND_METRICS.map(([m, label]) => {
+    const ys = trendRounds(rounds, { type, n, holes, metric: m }).map(p => +p[m]);
+    if (ys.length < 2) return { m, label, pts: null };
+    const lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+    // Better is always up: lower is better for score and putts, higher for greens.
+    const pts = ys.map((v, i) => {
+      const up = m === "gir" ? (v - lo) / span : (hi - v) / span;
+      return `${(L + i * (W - L - R) / (ys.length - 1)).toFixed(1)},${(H - B - up * (H - T - B)).toFixed(1)}`;
+    });
+    return { m, label, pts };
+  });
+  const shown = series.filter(s => s.pts);
+  if (shown.length < 2) return "";
+  return `<div class="tr-glance" aria-label="All stats at a glance">${shown.map(s => `<div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(s.label)} trend, same rounds">
+        ${shown.filter(o => o !== s).map(o => `<polyline points="${o.pts.join(" ")}" class="tg-faded"/>`).join("")}
+        <polyline points="${s.pts.join(" ")}" class="tg-main"/>
+        <circle cx="${s.pts[s.pts.length - 1].split(",")[0]}" cy="${s.pts[s.pts.length - 1].split(",")[1]}" r="4" class="tg-end"/>
+      </svg><small>${esc(s.label)}</small></div>`).join("")}</div>`;
 }

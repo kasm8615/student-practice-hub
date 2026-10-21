@@ -400,7 +400,7 @@ export function start(root, { students, onSignOut }) {
         <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
       ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
       <button class="bag-link" data-go="bag"><span><b>My club distances</b><small>${carried(myBag()).length ? `${carried(myBag()).length} clubs · updated ${esc(shortDate(bagEntry().updated_at))}` : "Add how far you hit each club"}</small></span><span class="chev">›</span></button>
-      ${r.length >= 2 ? `<section class="card"><h2>Your trend</h2>${trendHtml(r, S.trend)}</section>` : ""}
+      ${r.length >= 1 ? `<section class="card"><h2>Your trend</h2>${trendHtml(r, S.trend)}</section>` : ""}
       <section class="card"><h2>Recent rounds</h2>${r.map(x => { const d = dateParts(x.date); return `<button class="round" data-round="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
         <span><span style="font-weight:600;display:block">${esc(x.course || x.event || "Round")}</span><span class="meta">${esc(x.event || "")} · ${esc(x.holes || "18")} holes${x.putts !== "" && x.putts != null ? ` · ${esc(x.putts)} putts` : ""}${x.fairways ? ` · FW ${esc(x.fairways)}` : ""}</span></span>
         <span class="sc">${esc(x.score)}</span></button>`; }).join("") || `<p class="muted">No rounds yet. Log your next one after you play.</p>`}</section></main>`;
