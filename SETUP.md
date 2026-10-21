@@ -113,3 +113,12 @@ Supabase SQL Editor → run `supabase/update-3.sql`. Students open Rounds → **
 ## Update 4 (security fixes)
 
 Supabase SQL Editor → run `supabase/update-4.sql`. A brand-new database runs, in order: `schema.sql`, `notify.sql` (with the secret), `update-2.sql`, `update-3.sql`, `update-4.sql`.
+
+## Update 5: pictures and PDFs in notes (and 30-second videos)
+
+Supabase SQL Editor → run `supabase/update-5.sql` (no values to replace). It creates a private storage bucket `practice-files` and the rules for who can read and add files.
+
+- Students and Karina can attach a picture or PDF (up to 10 MB) to a note, alongside or instead of a video.
+- Student videos are limited to 30 seconds. The app checks the length on the phone before uploading, and the server removes any longer clip students post. The note form tells students about both limits.
+- Files and videos are visible only to Karina and the student's own space (the student and any parent who signs in for them). Deleting a note also deletes its picture or PDF.
+- No new Cloudflare settings are needed. Redeploy (any push to GitHub).

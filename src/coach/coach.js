@@ -1,6 +1,7 @@
 import "./coach.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
+import { fileField, fileBlock, removeFile } from "../lib/files.js";
 import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
@@ -30,7 +31,8 @@ const TYPES = {
     { k: "notes", t: "textarea", l: "What we worked on", full: true },
     { k: "homework", t: "textarea", l: "Homework", full: true },
     { k: "video_pid", t: "video", l: "Lesson video", full: true },
-    { k: "video", t: "url", l: "Or paste a video link (YouTube, Google Drive)", full: true, ph: "https://" }
+    { k: "video", t: "url", l: "Or paste a video link (YouTube, Google Drive)", full: true, ph: "https://" },
+    { k: "file", t: "file", l: "Picture or PDF (handout, swing photo)", full: true }
   ] },
   drill: { tab: "Drills", one: "Drill", sub: "Drills with a pass target. Students log scores against the target.", fields: [
     { k: "name", t: "text", l: "Drill name", req: true, full: true },
@@ -41,7 +43,8 @@ const TYPES = {
     { k: "target", t: "text", l: "What counts", full: true, ph: "e.g. putts finish within a club length past the hole" },
     { k: "notes", t: "textarea", l: "How to do it", full: true },
     { k: "video_pid", t: "video", l: "Demo video", full: true },
-    { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" }
+    { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" },
+    { k: "file", t: "file", l: "Picture or PDF", full: true }
   ] },
   stat: { tab: "Stats", one: "Round", sub: "Rounds logged by you or the student. The chart tracks 18-hole scores.", fields: [
     { k: "date", t: "date", l: "Date", req: true },
@@ -73,7 +76,8 @@ const TYPES = {
     { k: "dose", t: "text", l: "Sets / reps", ph: "e.g. 3 x 10" },
     { k: "notes", t: "textarea", l: "Notes", full: true },
     { k: "video_pid", t: "video", l: "Demo video", full: true },
-    { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" }
+    { k: "video", t: "url", l: "Or paste a video link", full: true, ph: "https://" },
+    { k: "file", t: "file", l: "Picture or PDF", full: true }
   ] }
 };
 const TAB_ORDER = ["overview", "goal", "lesson", "drill", "stat", "plan", "session", "fitness", "note"];
@@ -304,7 +308,7 @@ export function start(root, { onSignOut }) {
       const r = sortDateDesc(rows);
       return head(t) + (r.length ? `<div class="entries">${r.map(e => { const dp = dateParts(e.date); return `<div class="entry" data-edit="${esc(e.id)}" role="button" tabindex="0">
         <div class="date-block"><div class="d">${dp.d}</div><div class="m">${dp.m}</div></div>
-        <div><div class="t">${esc(e.focus)}</div><div class="body">${esc(e.notes)}</div>${e.homework ? `<div class="hw"><b>Homework:</b> ${esc(e.homework)}</div>` : ""}${e.video_pid ? `<div style="margin-top:8px">${videoThumb(e.video_pid, "Lesson video")}</div>` : ""}</div>
+        <div><div class="t">${esc(e.focus)}</div><div class="body">${esc(e.notes)}</div>${e.homework ? `<div class="hw"><b>Homework:</b> ${esc(e.homework)}</div>` : ""}${e.video_pid ? `<div style="margin-top:8px">${videoThumb(e.video_pid, "Lesson video")}</div>` : ""}${e.file_path ? `<div style="margin-top:8px">${fileBlock(e, "Picture")}</div>` : ""}</div>
         <div style="text-align:right"><span class="pill neutral">${esc(e.kind || "Lesson")}</span><div style="font-size:12px;margin-top:4px">${vid(e.video)}</div></div></div>`; }).join("")}</div>` : empty(t));
     }
     if (t === "drill") {
@@ -316,6 +320,7 @@ export function start(root, { onSignOut }) {
         ${e.goal ? `<div style="font-size:13px;margin-top:2px"><b>Target:</b> <span class="hcp">${esc(e.goal)}/${esc(e.of || 10)}</span> ${esc(e.target || "")}</div>` : ""}
         <div class="body">${esc(e.notes)}${e.video ? " · " + vid(e.video) : ""}</div>
         ${e.video_pid ? `<div style="margin-top:8px">${videoThumb(e.video_pid, "Demo")}</div>` : ""}
+        ${e.file_path ? `<div style="margin-top:8px">${fileBlock(e, "Picture")}</div>` : ""}
         ${sc.length ? `<div class="scoreline">Scores: ${sc.slice(-6).map(x => x.score).join(" → ")}${last ? ` · last ${esc(shortDate(last.scored_on))}` : ""}<span class="mini" aria-hidden="true">${sc.slice(-8).map(x => `<i style="height:${Math.max(2, x.score / max * 22)}px"></i>`).join("")}</span></div>` : e.goal ? `<div class="scoreline" style="color:var(--ink-3)">No scores logged yet</div>` : ""}</div>
         <div>${statusPill(e.status)}</div></div>`; }).join("")}</div>` : empty(t));
     }
@@ -424,10 +429,10 @@ export function start(root, { onSignOut }) {
   function notesPanel(s) {
     const notes = of("note").slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
     return `<div class="panel-head"><div><h3>Notes</h3><p>Messages between you and ${esc(String(s.name).split(/\s+/)[0])}. They see your replies in the app.</p></div></div>
-      <div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "student"}">${n.text ? esc(n.text) : ""}${n.video_pid ? `<div style="margin-top:${n.text ? 8 : 0}px">${videoThumb(n.video_pid, n.author === "coach" ? "Your video" : "Swing video")}</div>` : ""}<small>${n.author === "coach" ? "You" : esc(String(s.name).split(/\s+/)[0])} · ${esc(shortDate(n.created_at))}${n.author === "coach" ? ` · <button class="linkbtn" style="font-size:11px" data-delnote="${esc(n.id)}">Delete</button>` : ""}</small></div>`).join("") || '<div class="empty">No notes yet.</div>'}</div>
+      <div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "student"}">${n.text ? esc(n.text) : ""}${n.video_pid ? `<div style="margin-top:${n.text ? 8 : 0}px">${videoThumb(n.video_pid, n.author === "coach" ? "Your video" : "Swing video")}</div>` : ""}${n.file_path ? `<div style="margin-top:${n.text || n.video_pid ? 8 : 0}px">${fileBlock(n, n.author === "coach" ? "Your picture" : "Picture")}</div>` : ""}<small>${n.author === "coach" ? "You" : esc(String(s.name).split(/\s+/)[0])} · ${esc(shortDate(n.created_at))}${n.author === "coach" ? ` · <button class="linkbtn" style="font-size:11px" data-delnote="${esc(n.id)}">Delete</button>` : ""}</small></div>`).join("") || '<div class="empty">No notes yet.</div>'}</div>
       <form class="reply" id="replyForm" novalidate style="flex-direction:column;align-items:stretch">
         <textarea id="replyText" aria-label="Write a note" placeholder="Write a note, answer a question, or send a swing review"></textarea>
-        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap"><div id="replyVideo"></div><button class="btn primary" type="submit">Send</button></div></form>`;
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap"><div id="replyVideo"></div><div id="replyFile"></div><button class="btn primary" type="submit">Send</button></div></form>`;
   }
 
   // ---------- forms
@@ -435,6 +440,7 @@ export function start(root, { onSignOut }) {
     const id = `f-${prefix}-${f.k}`, v = val ?? "";
     const cls = "field" + (f.full ? " full" : "") + (f.t === "check" ? " check" : "");
     if (f.t === "video") return `<div class="${cls}"><label>${esc(f.l)}</label><div data-vfield="${f.k}"></div></div>`;
+    if (f.t === "file") return `<div class="${cls}"><label>${esc(f.l)}</label><div data-ffield="${f.k}"></div></div>`;
     if (f.t === "check") return `<div class="${cls}"><input type="checkbox" id="${id}" name="${f.k}" ${v ? "checked" : ""}><label for="${id}">${esc(f.l)}</label></div>`;
     let input;
     if (f.t === "textarea") input = `<textarea id="${id}" name="${f.k}" placeholder="${esc(f.ph || "")}">${esc(v)}</textarea>`;
@@ -453,6 +459,12 @@ export function start(root, { onSignOut }) {
     const form = mr.querySelector("form");
     const vids = {};
     fields.filter(f => f.t === "video").forEach(f => { vids[f.k] = videoField(form.querySelector(`[data-vfield="${f.k}"]`), data ? data[f.k] : ""); });
+    // Picture or PDF: the file's details are stored on the entry as file_path, file_name and file_kind.
+    const files = {};
+    fields.filter(f => f.t === "file").forEach(f => {
+      const cur = data && data.file_path ? { file_path: data.file_path, file_name: data.file_name, file_kind: data.file_kind } : null;
+      files[f.k] = fileField(form.querySelector(`[data-ffield="${f.k}"]`), S.sel, cur, { label: "Attach picture or PDF" });
+    });
     // Unsaved changes are kept as a draft, and clicking outside the form never throws them away.
     const snap = () => { const o = {}; Array.from(form.elements).forEach(el => { if (el.name) o[el.name] = el.type === "checkbox" ? el.checked : el.value; }); return JSON.stringify(o); };
     const initial = snap();
@@ -461,7 +473,8 @@ export function start(root, { onSignOut }) {
       Object.entries(saved).forEach(([k, v]) => { const el = form.elements[k]; if (el && el.name) { if (el.type === "checkbox") el.checked = !!v; else el.value = v; } });
       if (snap() !== initial) form.querySelector("h3").insertAdjacentHTML("afterend", `<div class="draft-note">Restored what you wrote before. <button type="button" class="linkbtn" data-discard="1">Start over</button></div>`);
     }
-    const dirty = () => snap() !== initial || Object.entries(vids).some(([k, v]) => v.busy || (v.value || "") !== ((data && data[k]) || ""));
+    const dirty = () => snap() !== initial || Object.entries(vids).some(([k, v]) => v.busy || (v.value || "") !== ((data && data[k]) || ""))
+      || Object.values(files).some(c => c.busy || (c.value?.file_path || "") !== ((data && data.file_path) || ""));
     const keep = () => { if (!key) return; if (dirty()) draft.set(key, JSON.parse(snap())); else draft.clear(key); };
     form.addEventListener("input", keep);
     form.addEventListener("change", keep);
@@ -482,9 +495,10 @@ export function start(root, { onSignOut }) {
     form.addEventListener("submit", async e => {
       e.preventDefault();
       const out = {};
-      if (Object.values(vids).some(v => v.busy)) { toast("Wait for the video to finish uploading."); return; }
+      if (Object.values(vids).some(v => v.busy) || Object.values(files).some(c => c.busy)) { toast("Wait for the upload to finish."); return; }
       for (const f of fields) {
         if (f.t === "video") { out[f.k] = vids[f.k].value; continue; }
+        if (f.t === "file") { const v = files[f.k].value; out.file_path = v?.file_path || ""; out.file_name = v?.file_name || ""; out.file_kind = v?.file_kind || ""; continue; }
         const el = form.elements[f.k];
         if (f.t === "check") out[f.k] = el.checked;
         else if (f.t === "number") out[f.k] = el.value === "" ? "" : +el.value;
@@ -541,6 +555,8 @@ export function start(root, { onSignOut }) {
 
   // ---------- render & navigation
   let replyVideo = null;
+  let replyFile = null;
+  let replyFileFor = null; // the student the attached file belongs to
   function render() {
     const view = document.getElementById("cview");
     if (view.querySelector(".vprog")) { clearTimeout(render._t); render._t = setTimeout(render, 1500); return; } // an upload is in progress: redraw afterwards
@@ -549,11 +565,15 @@ export function start(root, { onSignOut }) {
     const keep = {};
     view.querySelectorAll("textarea[id],input[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
     const prevVideo = replyVideo && S.view === "student" && S.tab === "note" ? replyVideo.value : "";
+    const prevFile = replyFile && replyFileFor === S.sel && S.view === "student" && S.tab === "note" ? replyFile.value : null;
     view.innerHTML = `<div class="c-wrap"><div class="app ${S.view === "student" || S.view === "checkin" ? "has-student" : ""}" id="capp">${rosterHtml()}<main class="main">${main}</main></div></div>`;
     Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && !["search", "replyText", "goalNote"].includes(id) && !el.value) el.value = v; });
     ["replyText", "goalNote"].forEach(id => { const el = document.getElementById(id); const v = el && draft.get(`${S.sel}.${id}`); if (el && v != null) el.value = v; });
     const rv = document.getElementById("replyVideo");
     replyVideo = rv ? videoField(rv, prevVideo, { label: "Attach video" }) : null;
+    const rf = document.getElementById("replyFile");
+    replyFileFor = S.sel;
+    replyFile = rf ? fileField(rf, S.sel, prevFile, { label: "Attach picture or PDF" }) : null;
     if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } }
   }
   async function openStudent(id) {
@@ -586,7 +606,12 @@ export function start(root, { onSignOut }) {
     if (t.dataset.tab) { S.tab = t.dataset.tab; S.planWeek = null; render(); return; }
     if (t.dataset.cweek != null) { S.planWeek = +t.dataset.cweek === 0 ? null : addDays(S.planWeek || weekStartOf(), +t.dataset.cweek); render(); return; }
     if (t.dataset.remind) { const s = S.students.find(x => x.id === t.dataset.remind); if (s) await copy(reminderText(s)); return; }
-    if (t.dataset.delnote) { await write(api.deleteEntry(t.dataset.delnote), "Note deleted"); return; }
+    if (t.dataset.delnote) {
+      const note = (S.entries || []).find(x => x.id === t.dataset.delnote);
+      const ok = await write(api.deleteEntry(t.dataset.delnote), "Note deleted");
+      if (ok && note?.file_path) removeFile(note.file_path);
+      return;
+    }
     const a = t.dataset.act;
     if (a === "add-student") return studentForm();
     if (a === "show-roster") { S.view = "roster"; render(); window.scrollTo(0, 0); return; }
@@ -630,15 +655,18 @@ export function start(root, { onSignOut }) {
     if (ev.target.id !== "replyForm") return;
     ev.preventDefault();
     const text = document.getElementById("replyText").value.trim();
-    if (replyVideo?.busy) { toast("Wait for the video to finish uploading."); return; }
+    if (replyVideo?.busy || replyFile?.busy) { toast("Wait for the upload to finish."); return; }
     const video_pid = replyVideo?.value || "";
-    if (!text && !video_pid) { toast("Write a note or attach a video first."); return; }
+    const file = replyFile?.value || null;
+    if (!text && !video_pid && !file) { toast("Write a note or attach a video, picture or PDF first."); return; }
     document.getElementById("replyText").value = "";
     if (replyVideo) replyVideo.value = "";
+    if (replyFile) replyFile.value = null;
     const sid = S.sel;
     draft.clear(`${sid}.replyText`);
-    const ok = await write(api.addEntry(sid, "note", video_pid ? { text, video_pid } : { text }), "Sent");
-    if (!ok) { draft.set(`${sid}.replyText`, text); const el = document.getElementById("replyText"); if (el) el.value = text; }
+    const extra = { ...(video_pid ? { video_pid } : {}), ...(file ? { file_path: file.file_path, file_name: file.file_name, file_kind: file.file_kind } : {}) };
+    const ok = await write(api.addEntry(sid, "note", { text, ...extra }), "Sent");
+    if (!ok) { draft.set(`${sid}.replyText`, text); const el = document.getElementById("replyText"); if (el) el.value = text; if (replyFile && file) replyFile.value = file; }
   };
 
   root.innerHTML = `<div id="cview"><div class="center-msg"><div><p>Loading your students…</p></div></div></div><div id="modalRoot"></div>`;

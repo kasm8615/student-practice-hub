@@ -6,6 +6,8 @@
 //   MUX_TOKEN_ID, MUX_TOKEN_SECRET  (secret)
 //   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  (already set for the app)
 
+const STUDENT_MAX_SECONDS = 30;
+
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
@@ -62,6 +64,11 @@ export async function onRequestGet({ request, env }) {
   const as = await mux(env, `/video/v1/assets/${upload.asset_id}`);
   if (!as.ok) return json({ status: "processing" });
   const asset = (await as.json()).data;
+  // Students' clips are limited to 30 seconds. Remove anything longer before it can be watched.
+  if (role === "student" && asset.duration && asset.duration > STUDENT_MAX_SECONDS) {
+    await mux(env, `/video/v1/assets/${upload.asset_id}`, { method: "DELETE" });
+    return json({ status: "too_long", duration: asset.duration });
+  }
   const pid = (asset.playback_ids || []).find(p => p.policy === "signed")?.id;
   return json({ status: asset.status === "ready" ? "ready" : asset.status === "errored" ? "errored" : "processing", playbackId: pid || null, duration: asset.duration || null });
 }

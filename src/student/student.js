@@ -1,6 +1,7 @@
 import "./student.css";
 import { api } from "../lib/store.js";
 import { videoThumb, videoField, bindPlayer } from "../lib/video.js";
+import { fileField, fileBlock } from "../lib/files.js";
 import { quoteOfTheDay } from "../lib/quotes.js";
 import { benchmarkTable, myAverages, biggestGap, benchmark } from "../lib/benchmarks.js";
 import { trendHtml } from "../lib/trend.js";
@@ -640,7 +641,7 @@ export function start(root, { students, onSignOut }) {
       <div class="readonly">${LOCK}Written by Karina</div>
       ${drills.length ? `<section class="card"><h2>My drills</h2>${drills.map(d => { const l = lastScore(d.id); const st = d.status === "Mastered" ? ["good", "Mastered"] : l && d.goal && l.score >= +d.goal ? ["good", "Target hit"] : l ? ["warn", `${l.score}/${l.out_of}`] : ["n", d.status || "Assigned"];
         return `<button class="drill" data-drill="${esc(d.id)}"><span><span class="t" style="display:block">${esc(d.name)}</span><span class="tg">${d.goal ? `Target: ${esc(d.goal)}/${esc(d.of || 10)} ` : ""}${esc(d.target || d.category || "")}</span></span><span class="pill ${st[0]}">${esc(st[1])}</span></button>`; }).join("")}</section>` : ""}
-      ${lessons.map(l => `<section class="card lesson"><div class="dt">${esc(fmtDate(l.date))}${l.kind ? " · " + esc(l.kind) : ""}</div><div class="t">${esc(l.focus)}</div>${l.notes ? `<p>${esc(l.notes)}</p>` : ""}${l.homework ? `<div class="hw"><b>Homework:</b> ${esc(l.homework)}</div>` : ""}${videoThumb(l.video_pid, "Lesson video")}${demoLink(l.video, "Watch lesson video")}</section>`).join("")}
+      ${lessons.map(l => `<section class="card lesson"><div class="dt">${esc(fmtDate(l.date))}${l.kind ? " · " + esc(l.kind) : ""}</div><div class="t">${esc(l.focus)}</div>${l.notes ? `<p>${esc(l.notes)}</p>` : ""}${l.homework ? `<div class="hw"><b>Homework:</b> ${esc(l.homework)}</div>` : ""}${videoThumb(l.video_pid, "Lesson video")}${demoLink(l.video, "Watch lesson video")}${l.file_path ? `<div style="margin-top:8px">${fileBlock(l, "Picture")}</div>` : ""}</section>`).join("")}
       ${fit.length ? `<section class="card"><h2>Fitness</h2>${fit.map(f => `<div class="drill" style="cursor:default"><span><span class="t" style="display:block">${esc(f.name)}${f.dose ? ` <span class="tg">· ${esc(f.dose)}</span>` : ""}</span><span class="tg">${esc(f.kind || "")}${f.notes ? " · " + esc(f.notes) : ""}</span>${f.video_pid ? `<span style="display:block;margin-top:8px">${videoThumb(f.video_pid, "Watch demo")}</span>` : ""}</span>${f.result && f.result !== "—" ? `<span class="pill ${f.result === "Pass" ? "good" : f.result === "Fail" ? "bad" : f.result === "Needs work" ? "warn" : "n"}">${esc(f.result)}</span>` : ""}</div>`).join("")}</section>` : ""}
       ${!lessons.length && !drills.length && !fit.length ? `<div class="card"><p class="muted">Karina's lesson notes and drills will show up here.</p></div>` : ""}
     </main>`;
@@ -648,8 +649,8 @@ export function start(root, { students, onSignOut }) {
   function notesScreen() {
     const notes = of("note").slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
     return top("Notes", S.profile?.name || "") + `<main class="s-content">
-      <section class="card"><h2>With Karina</h2><div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "me"}">${n.text ? esc(n.text) : ""}${n.video_pid ? `<div style="margin-top:${n.text ? 8 : 0}px">${videoThumb(n.video_pid, n.author === "coach" ? "Karina's video" : "Your swing")}</div>` : ""}<small>${n.author === "coach" ? "Karina" : "You"} · ${esc(shortDate(n.created_at))}</small></div>`).join("") || `<p class="muted">No notes yet. Ask a question or tell Karina how practice went.</p>`}</div></section>
-      <form class="card" id="noteForm" novalidate><label for="note" style="font-size:12px;font-weight:600;color:var(--ink-2)">New note, question or swing video</label><textarea id="note" placeholder="How practice went, or a question for your next lesson"></textarea><div id="noteVideo"></div><button class="btn primary" type="submit">Send to Karina</button></form>
+      <section class="card"><h2>With Karina</h2><div class="thread">${notes.map(n => `<div class="msg ${n.author === "coach" ? "coach" : "me"}">${n.text ? esc(n.text) : ""}${n.video_pid ? `<div style="margin-top:${n.text ? 8 : 0}px">${videoThumb(n.video_pid, n.author === "coach" ? "Karina's video" : "Your swing")}</div>` : ""}${n.file_path ? `<div style="margin-top:${n.text || n.video_pid ? 8 : 0}px">${fileBlock(n, n.author === "coach" ? "Karina's picture" : "Your picture")}</div>` : ""}<small>${n.author === "coach" ? "Karina" : "You"} · ${esc(shortDate(n.created_at))}</small></div>`).join("") || `<p class="muted">No notes yet. Ask a question or tell Karina how practice went.</p>`}</div></section>
+      <form class="card" id="noteForm" novalidate><label for="note" style="font-size:12px;font-weight:600;color:var(--ink-2)">New note, question, swing video, picture or PDF</label><textarea id="note" placeholder="How practice went, or a question for your next lesson"></textarea><div id="noteVideo"></div><div id="noteFile"></div><p class="muted">Videos can be up to 30 seconds. Pictures and PDFs up to 10 MB. Only you and Karina can see what you send.</p><button class="btn primary" type="submit">Send to Karina</button></form>
     </main>`;
   }
   function nav() {
@@ -725,6 +726,7 @@ export function start(root, { students, onSignOut }) {
 
   // ---------- render
   let noteVideo = null;
+  let noteFile = null;
   // Text typed into these forms is kept until it's saved, even if the student leaves the screen or closes the app.
   const DRAFTABLE = ["noteForm", "practiceForm", "roundForm", "goalForm"].map(f => `#${f} textarea[id], #${f} input[id]:not([type=checkbox]):not([type=date])`).join(", ");
   const clearDrafts = (formId, sid = S.sid) => { const f = document.getElementById(formId); if (f) f.querySelectorAll("[id]").forEach(el => draft.clear(`${sid}.${el.id}`)); };
@@ -741,11 +743,14 @@ export function start(root, { students, onSignOut }) {
     const act = document.activeElement, focusId = act && root.contains(act) ? act.id : "";
     let caret = null; try { caret = focusId && act.selectionStart != null ? [act.selectionStart, act.selectionEnd] : null; } catch {}
     const prevVideo = noteVideo && S.screen === "notes" ? noteVideo.value : "";
+    const prevFile = noteFile && S.screen === "notes" ? noteFile.value : null;
     root.innerHTML = `<div class="s-app">${scr}</div>${nav()}${sheetHtml()}`;
     Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && el.value !== v) el.value = v; });
     root.querySelectorAll(DRAFTABLE).forEach(el => { const v = draft.get(`${S.sid}.${el.id}`); if (v != null) el.value = v; });
     const nv = document.getElementById("noteVideo");
-    noteVideo = nv ? videoField(nv, prevVideo, { label: "Attach a swing video" }) : null;
+    noteVideo = nv ? videoField(nv, prevVideo, { label: "Attach a swing video (30 seconds max)", maxSeconds: 30 }) : null;
+    const nf = document.getElementById("noteFile");
+    noteFile = nf ? fileField(nf, S.sid, prevFile, { label: "Attach a picture or PDF" }) : null;
     if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus({ preventScroll: true }); try { if (caret) el.setSelectionRange(caret[0], caret[1]); } catch {} } }
     window.scrollTo(0, y);
     document.body.style.overflow = S.sheet && root.querySelector(".sheet") ? "hidden" : "";
@@ -1003,15 +1008,18 @@ export function start(root, { students, onSignOut }) {
     }
     if (e.target.id === "noteForm") {
       const text = root.querySelector("#note").value.trim();
-      if (noteVideo?.busy) { toast("Wait for the video to finish uploading."); return; }
+      if (noteVideo?.busy || noteFile?.busy) { toast("Wait for the upload to finish."); return; }
       const video_pid = noteVideo?.value || "";
-      if (!text && !video_pid) { toast("Write a note or attach a video first."); return; }
+      const file = noteFile?.value || null;
+      if (!text && !video_pid && !file) { toast("Write a note or attach a video, picture or PDF first."); return; }
       root.querySelector("#note").value = "";
       if (noteVideo) noteVideo.value = "";
+      if (noteFile) noteFile.value = null;
       const sid = S.sid;
       draft.clear(`${sid}.note`);
-      const ok = await run(() => api.addEntry(sid, "note", video_pid ? { text, video_pid } : { text }), video_pid ? "Video sent to Karina" : "Sent to Karina");
-      if (!ok) { draft.set(`${sid}.note`, text); const el = root.querySelector("#note"); if (el) el.value = text; if (noteVideo && video_pid) noteVideo.value = video_pid; }
+      const extra = { ...(video_pid ? { video_pid } : {}), ...(file ? { file_path: file.file_path, file_name: file.file_name, file_kind: file.file_kind } : {}) };
+      const ok = await run(() => api.addEntry(sid, "note", { text, ...extra }), video_pid ? "Video sent to Karina" : "Sent to Karina");
+      if (!ok) { draft.set(`${sid}.note`, text); const el = root.querySelector("#note"); if (el) el.value = text; if (noteVideo && video_pid) noteVideo.value = video_pid; if (noteFile && file) noteFile.value = file; }
     }
   };
 

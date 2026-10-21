@@ -78,6 +78,10 @@ a{color:var(--pine)}
 .vbar{height:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
 .vbar i{display:block;height:100%;background:var(--pine);transition:width .2s}
 .verr{margin:0;font-size:13px;color:var(--bad)}
+/* pictures and PDFs attached to notes */
+.fthumb img{object-fit:contain}
+.filechip{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.filechip.static{cursor:default;font-weight:500}
 .auth .quote{margin:22px 0 0;font-size:17px;line-height:1.45;max-width:30ch;font-weight:500}
 .auth .quote span{display:block;margin-top:6px;font-size:13px;font-weight:600;opacity:.8}
 .logo,.auth-logo,.s-logo,.c-logo{display:block;flex:none;color:inherit}
