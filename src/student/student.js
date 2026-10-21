@@ -10,6 +10,7 @@ import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstat
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { DEALER_PLACES, SCHEDULES, RESULTS, dealShot, summarize, bandLines, clampLevel } from "../lib/shotdeck.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
+import { TEST_SHOTS, GAME_SHOTS, DEPTHS, DEPTH_Y, MISSES, CONTACT_LABEL, sortClubs, shotsFor, clubsIn, stats as patStats, missLine, depthLine, poorLine, tips as patTips, plotSvg, tapToYards, legendHtml, courseClubs, courseSummary, courseSvg, gameOrder } from "../lib/pattern.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, dayNum, blockDate } from "../lib/util.js";
 
 const ICON = {
@@ -57,6 +58,7 @@ export function start(root, { students, onSignOut }) {
     S.profile = null; S.entries = []; S.scores = []; S.bagDraft = null; S.wedgeDraft = null; S.bagTab = "bag"; S.planWeek = null; S.reviews = {}; S.bagBusy = false;
     S.game = { ...S.game, ai: null, aiBusy: false, pin: null, seed: 0 };
     { const d = draft.get(`${id}.dealer`); S.dealer = d && Array.isArray(d.history) && d.t0 > Date.now() - 864e5 ? d : null; }
+    { const p = draft.get(`${id}.pattern`); S.pat = p && Array.isArray(p.shots) && Array.isArray(p.order) && p.t0 > Date.now() - 864e5 ? p : null; S.patSetup = null; S.patView = { club: "", src: "", cclub: "" }; }
     { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
@@ -182,6 +184,7 @@ export function start(root, { students, onSignOut }) {
     return top("Practice plan", S.profile?.name || "") + `<main class="s-content">
       <button class="games-cta" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game. Tap to get a session.</span></button>
       <button class="games-cta alt" data-go="dealer"><b>Shot dealer</b><span>Random shots, one at a time. You can't plan the next one, so it trains you for the course.</span></button>
+      <button class="games-cta alt" data-go="pattern"><b>Shot pattern</b><span>Tap where each ball finishes and rate the strike. See your real miss and fix the right thing.</span></button>
       ${planPart}${practiceLog()}</main>`;
   }
   function practiceLog() {
@@ -315,6 +318,139 @@ export function start(root, { students, onSignOut }) {
       <button class="btn" data-act="dealer-finish">Finish${name ? ", " + esc(name) : ""}</button>
       <p class="muted" style="text-align:center">Tap how it went to get your next shot. No peeking ahead.</p></main>`;
   }
+  // ---------- shot pattern (dispersion at the range, plus approach misses from rounds)
+  const patSave = () => { if (S.pat) draft.set(`${S.sid}.pattern`, S.pat); else draft.clear(`${S.sid}.pattern`); };
+  const carryOf = club => carried(myBag()).find(c => c.club === club)?.carry || "";
+  const patClubOptions = () => { const b = sortClubs(myBag().filter(c => c.on !== false && c.club).map(c => c.club)); return b.length >= 3 ? b : CLUBS; };
+  function patSetup() {
+    if (S.patSetup) return S.patSetup;
+    const opts = patClubOptions(), has = c => opts.includes(c);
+    const t = has("7 iron") ? "7 iron" : opts[Math.floor(opts.length / 2)];
+    // A short, middle and long club: 9 iron, 7 iron and the next longer club they carry.
+    const pref = ["9 iron", "7 iron", "5 iron", "6 iron", "Hybrid", "8 iron", "PW", "4 iron"];
+    let three = pref.filter(has).slice(0, 3);
+    if (three.length < 3) { const longer = opts.filter(c => /hybrid|iron/i.test(c) && !three.includes(c)); three = three.concat(longer).slice(0, 3); }
+    if (three.length < 3) three = opts.slice(0, 3);
+    const gs = sortClubs(three).reverse().map(club => ({ club, yds: String(carryOf(club)) }));
+    return (S.patSetup = { tclub: t, tyds: String(carryOf(t)), g: gs });
+  }
+  const clubSelect = (id, cur) => `<select id="${id}" class="lv-sel">${sortClubs([...patClubOptions(), cur]).map(c => `<option ${c === cur ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
+  function patStatsHtml(st) {
+    const solidPoor = [st.solid.n ? `Solid shots within 10 yds: <b>${st.solid.near} of ${st.solid.n}</b>` : "", st.poor.n ? `Poor shots within 10 yds: <b>${st.poor.near} of ${st.poor.n}</b>` : ""].filter(Boolean);
+    return `<div class="pat-stats"><div><small>Average miss</small><b>${esc(missLine(st))}</b></div><div><small>Contact</small><b>${st.contact != null ? st.contact.toFixed(1) + " of 5" : "–"}</b></div>
+      <div><small>Left to right</small><b>${Math.round(st.width)} yds</b></div><div><small>Short to long</small><b>${esc(depthLine(st))}</b></div></div>
+      ${solidPoor.length ? `<p class="pat-line">${solidPoor.join(" · ")}</p>` : ""}
+      ${poorLine(st) ? `<p class="pat-line">Poor strikes: ${esc(poorLine(st))}</p>` : ""}
+      <ul class="pat-tips">${patTips(st).map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  }
+  function patternScreen() {
+    if (S.pat?.phase === "shoot") return patShootHtml();
+    if (S.pat?.phase === "done") return patDoneHtml();
+    const pats = of("pattern"), rounds = of("stat"), V = S.patView;
+    const rClubs = clubsIn(pats), cClubs = courseClubs(rounds), cAll = courseSummary(rounds);
+    const club = rClubs.includes(V.club) ? V.club : rClubs.slice().sort((a, b) => shotsFor(pats, b, "", 999).length - shotsFor(pats, a, "", 999).length)[0] || "";
+    const has = m => club && shotsFor(pats, club, m).length > 0;
+    const src = V.src || (has("test") ? "test" : has("game") ? "game" : cAll.n ? "course" : "test");
+    const chips = (list, cur, attr) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn sm" ${attr}="${esc(v)}" aria-pressed="${v === cur}">${esc(l)}</button>`).join("")}</div>`;
+    let view = "";
+    if (src === "course") {
+      const cc = cClubs.includes(V.cclub) ? V.cclub : "", sum = courseSummary(rounds, cc);
+      view = (cClubs.length ? chips([["", "All clubs"], ...cClubs.map(c => [c, c])], cc, "data-pcclub") : "")
+        + (sum.n ? `${courseSvg(sum)}<p class="muted">From ${sum.n} approach shot${sum.n > 1 ? "s" : ""} in your hole-by-hole rounds. Rounds record short, long, left or right, not an exact spot, so these are percentages.</p>
+          ${sum.n < 10 ? `<p class="pat-early">Early read: ${sum.n} shots. Track a few more rounds before changing anything.</p>` : ""}`
+          : `<p class="muted">No approach shots yet. Track a round hole by hole and your misses into the green show up here.</p>`);
+    } else if (!club) {
+      view = `<p class="muted">No range sessions yet. Start a test below: 10 balls, one club, one target. It takes about 15 minutes.</p>`;
+    } else {
+      const shots = shotsFor(pats, club, src), st = patStats(shots);
+      view = chips(rClubs.map(c => [c, c]), club, "data-pclub")
+        + (st.n ? `<div class="pat-badge ${st.early ? "early" : ""}">${st.early ? `Early read · ${st.n} shots. Patterns settle after ${20} or more.` : `Last ${st.n} shots`}</div>
+          ${plotSvg(shots, { st, label: `${club} shot pattern` })}${legendHtml()}${patStatsHtml(st)}`
+          : `<p class="muted">No ${src === "game" ? "game mode" : "test"} shots with the ${esc(club)} yet.</p>`);
+    }
+    const P = patSetup();
+    const hist = byDateDesc(pats).slice(0, 10);
+    return top("Shot pattern", S.profile?.name || "") + `<main class="s-content">
+      <section class="card"><h2>Where your shots finish</h2>
+        <div class="pick seg3">${[["test", "Range test"], ["game", "Game mode"], ["course", "On course"]].map(([k, l]) => `<button type="button" class="pick-btn" data-psrc="${k}" aria-pressed="${src === k}">${l}</button>`).join("")}</div>
+        ${view}</section>
+      <section class="card"><h2>Range test <span>${TEST_SHOTS} balls</span></h2>
+        <p class="muted">One club, one target, every ball. This is your baseline. Do your full routine on every shot.</p>
+        <div class="pat-setup"><label>Club ${clubSelect("pt-club", P.tclub)}</label><label>Target (yds) <input id="pt-yds" class="lv-num" inputmode="numeric" value="${esc(P.tyds)}" placeholder="yds"></label></div>
+        <button class="btn primary" data-act="pat-test">Start the test</button></section>
+      <section class="card"><h2>Game mode <span>${GAME_SHOTS} balls</span></h2>
+        <p class="muted">Three clubs, a new one every ball, like the course. Your pattern will look wider than in the test. That's the honest one.</p>
+        ${P.g.map((g, i) => `<div class="pat-setup"><label>Club ${i + 1} ${clubSelect("pg-c" + i, g.club)}</label><label>Target (yds) <input id="pg-y${i}" data-pgy="${i}" class="lv-num" inputmode="numeric" value="${esc(g.yds)}" placeholder="yds"></label></div>`).join("")}
+        <button class="btn" data-act="pat-game">Start game mode</button></section>
+      ${hist.length ? `<section class="card"><h2>Your sessions</h2>${hist.map(h => { const sh = Array.isArray(h.shots) ? h.shots : [], st = patStats(sh), d = dateParts(h.date);
+        return `<div class="round pat-hist"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
+          <span style="min-width:0"><span style="font-weight:600;display:block">${h.mode === "game" ? "Game mode" : "Test"} · ${esc(sortClubs(sh.map(s => s.club)).join(", "))}</span><span class="meta">${sh.length} shots${st.contact != null ? ` · contact ${st.contact.toFixed(1)}` : ""}${st.n ? ` · ${esc(missLine(st))}` : ""}</span></span>
+          ${h.author === "student" ? `<button class="linkbtn" data-act="pat-del" data-id="${esc(h.id)}">Delete</button>` : ""}</div>`; }).join("")}</section>` : ""}
+      <p class="muted" style="text-align:center">Karina sees your shot patterns.</p></main>`;
+  }
+  function patShootHtml() {
+    const P = S.pat, k = P.shots.length, total = P.order.length, tgt = P.clubs[P.order[Math.min(k, total - 1)]];
+    const mine = P.shots.filter(s => s.club === tgt.club), st = patStats(mine);
+    const rate = `<div class="pat-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="pick-btn" data-pc="${n}" aria-pressed="${P.c === n}" aria-label="${n}, ${CONTACT_LABEL[n]}">${n}</button>`).join("")}</div>
+      <div class="pat-ends"><span>Thin or fat</span><span>Pure</span></div>`;
+    return top("Shot pattern", P.mode === "game" ? "Game mode" : "Range test") + `<main class="s-content">
+      <div class="deal-stats"><span><b>${k + 1}/${total}</b>Shot</span><span><b>${esc(tgt.club)}</b>Club</span><span><b>${esc(tgt.yds || "–")}</b>Yards</span><span><b>${st.contact != null ? st.contact.toFixed(1) : "–"}</b>Contact</span></div>
+      ${P.mode === "game" ? `<p class="pat-next">Next: <b>${esc(tgt.club)}</b>${tgt.yds ? ` to ${esc(tgt.yds)} yds` : ""}. New club, full routine.</p>` : ""}
+      <section class="card pat-card">${plotSvg(mine, { st, pending: P.cur, id: "patTarget", label: "Target. Tap where the ball finished." })}${legendHtml()}</section>
+      <section class="card">
+        <p class="pat-step">${P.cur ? "Now rate the contact, then save the shot." : "Tap the target where the ball finished."}</p>
+        <h3 class="sh3">How solid was it?</h3>${rate}
+        ${P.c && P.c <= 2 ? `<h3 class="sh3">What kind of miss?</h3><div class="pick">${MISSES.map(([v, l]) => `<button type="button" class="pick-btn" data-pmiss="${v}" aria-pressed="${P.miss === v}">${l}</button>`).join("")}</div>` : ""}
+        <h3 class="sh3">How far did it go?</h3><div class="pick">${DEPTHS.map(([v, l]) => `<button type="button" class="pick-btn sm" data-pdepth="${v}" aria-pressed="${P.depth === v}">${l}</button>`).join("")}</div>
+        <p class="muted">Not sure of the distance? Pick short, pin high or long. Left and right still come from your tap.</p>
+        <button class="btn primary" data-act="pat-shot">Save shot</button>
+      </section>
+      <div class="row2"><button class="btn" data-act="pat-undo" ${k || P.cur ? "" : "disabled"}>Undo</button><button class="btn" data-act="pat-finish">Finish</button></div>
+      <button class="linkbtn" data-act="pat-discard" style="align-self:center">Discard this session</button></main>`;
+  }
+  function patDoneHtml() {
+    const P = S.pat, clubs = sortClubs(P.clubs.map(c => c.club));
+    return top("Shot pattern", P.mode === "game" ? "Game mode done" : "Test done") + `<main class="s-content">
+      ${clubs.map(c => { const sh = P.shots.filter(s => s.club === c), st = patStats(sh);
+        return `<section class="card"><h2>${esc(c)} <span>${sh.length} shots</span></h2>${st.n ? `${plotSvg(sh, { st, label: `${c} shot pattern` })}${legendHtml()}${patStatsHtml(st)}` : `<p class="muted">No shots with this club.</p>`}</section>`; }).join("")}
+      <p class="muted" style="text-align:center">One session is an early read. Save it, and your pattern builds up every time you test.</p>
+      <button class="btn primary" data-act="pat-save">Save and log practice</button>
+      <div class="row2"><button class="btn" data-act="pat-more">Hit 5 more</button><button class="btn" data-act="pat-discard">Discard</button></div></main>`;
+  }
+  function patStart(mode) {
+    const P = patSetup(), num = v => String(v || "").replace(/[^0-9]/g, "");
+    const clubs = mode === "test" ? [{ club: P.tclub, yds: num(P.tyds) }] : P.g.map(g => ({ club: g.club, yds: num(g.yds) }));
+    if (mode === "game" && new Set(clubs.map(c => c.club)).size < 3) { toast("Pick three different clubs."); return; }
+    const order = mode === "test" ? Array(TEST_SHOTS).fill(0) : gameOrder(3, GAME_SHOTS / 3);
+    S.pat = { mode, clubs, order, shots: [], cur: null, c: 0, miss: "", depth: "", phase: "shoot", t0: Date.now(), t1: 0 };
+    patSave(); render(); window.scrollTo(0, 0);
+  }
+  function patShot() {
+    const P = S.pat;
+    if (!P.cur) { toast("Tap the target where the ball finished first."); return; }
+    if (!P.c) { toast("Rate how solid the contact was."); return; }
+    const tgt = P.clubs[P.order[P.shots.length]];
+    P.shots.push({ club: tgt.club, yds: tgt.yds, x: P.cur.x, y: P.depth ? DEPTH_Y[P.depth] : P.cur.y, depth: P.depth, c: P.c, miss: P.c <= 2 ? P.miss : "" });
+    Object.assign(P, { cur: null, c: 0, miss: "", depth: "" });
+    if (P.shots.length >= P.order.length) { P.phase = "done"; P.t1 = Date.now(); window.scrollTo(0, 0); }
+    patSave(); render();
+  }
+  async function patSaveSession() {
+    const P = S.pat;
+    if (P.shots.length < 3) { toast("Hit at least 3 balls before saving."); return; }
+    const d = { date: today(), mode: P.mode, clubs: P.clubs, shots: P.shots };
+    const ok = await run(() => api.addEntry(S.sid, "pattern", d), "Shot pattern saved. Karina will see it.");
+    if (!ok) return;
+    const clubs = sortClubs(P.clubs.map(c => c.club));
+    const mins = Math.max(5, Math.min(120, Math.round(((P.t1 || Date.now()) - P.t0) / 60000)));
+    draft.set(`${S.sid}.p-worked`, `Shot pattern ${P.mode === "game" ? "game mode" : "test"}, ${P.shots.length} balls\n` + clubs.map(c => { const st = patStats(P.shots.filter(s => s.club === c)); return st.n ? `${c}: ${missLine(st)}, contact ${st.contact != null ? st.contact.toFixed(1) : "–"} of 5` : ""; }).filter(Boolean).join("\n"));
+    draft.set(`${S.sid}.p-min`, String(mins));
+    S.sess = { areas: AREA_NAMES.includes("Full swing") ? ["Full swing"] : [], rating: 0 };
+    S.pat = null; patSave();
+    S.screen = "plan"; S.planWeek = null; S.practiceOpen = true; S.sheet = null; render();
+    const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
+  }
+
   function cardTable(card) {
     const app = h => (h.app?.res || []).map(x => ({ G: "✓", S: "S", Lg: "Lg", L: "L", R: "R" }[x])).join("");
     const tee = h => h.par < 4 ? "" : { fw: "✓", L: "L", R: "R" }[h.tee?.res] || "";
@@ -400,6 +536,7 @@ export function start(root, { students, onSignOut }) {
       ${S.live ? `<section class="card live-resume"><h2>Round in progress</h2><p style="margin:0"><b>${esc(S.live.course || "Your round")}</b> · ${S.live.mode === "full" ? "Full" : "Quick"} · ${liveThru()}</p>
         <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
       ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
+      <button class="bag-link" data-go="pattern"><span><b>My shot pattern</b><small>${of("pattern").length ? `${of("pattern").length} range session${of("pattern").length > 1 ? "s" : ""} · where your shots finish` : "Test where your shots finish at the range"}</small></span><span class="chev">›</span></button>
       <button class="bag-link" data-go="bag"><span><b>My club distances</b><small>${carried(myBag()).length ? `${carried(myBag()).length} clubs · updated ${esc(shortDate(bagEntry().updated_at))}` : "Add how far you hit each club"}</small></span><span class="chev">›</span></button>
       ${r.length >= 1 ? `<section class="card"><h2>Your trend</h2>${trendHtml(r, S.trend)}</section>` : ""}
       <section class="card"><h2>Recent rounds</h2>${r.map(x => { const d = dateParts(x.date); return `<button class="round" data-round="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
@@ -655,7 +792,7 @@ export function start(root, { students, onSignOut }) {
   }
   function nav() {
     const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", live: "rounds", bag: "rounds", pattern: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -736,7 +873,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, pattern: patternScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id],select[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -809,7 +946,14 @@ export function start(root, { students, onSignOut }) {
   // ---------- events
   root.onclick = async e => {
     const t = e.target;
+    const tg = t.closest("#patTarget"); if (tg && S.pat?.phase === "shoot") { S.pat.cur = tapToYards(tg, e.clientX, e.clientY); patSave(); render(); return; }
     const goBtn = t.closest("[data-go]"); if (goBtn) { go(goBtn.dataset.go); return; }
+    const pcl = t.closest("[data-pclub]"); if (pcl) { S.patView.club = pcl.dataset.pclub; render(); return; }
+    const pcc = t.closest("[data-pcclub]"); if (pcc) { S.patView.cclub = pcc.dataset.pcclub; render(); return; }
+    const psr = t.closest("[data-psrc]"); if (psr) { S.patView.src = psr.dataset.psrc; render(); return; }
+    const ppc = t.closest("[data-pc]"); if (ppc && S.pat) { S.pat.c = +ppc.dataset.pc; if (S.pat.c > 2) S.pat.miss = ""; patSave(); render(); return; }
+    const pms = t.closest("[data-pmiss]"); if (pms && S.pat) { S.pat.miss = S.pat.miss === pms.dataset.pmiss ? "" : pms.dataset.pmiss; patSave(); render(); return; }
+    const pdp = t.closest("[data-pdepth]"); if (pdp && S.pat) { S.pat.depth = pdp.dataset.pdepth; patSave(); render(); return; }
     if (t.closest("[data-close]")) { S.sheet = null; render(); return; }
     const op = t.closest("[data-open]"); if (op) { S.sheet = { kind: "detail", id: op.dataset.open }; render(); return; }
     const rd = t.closest("[data-round]"); if (rd) { S.sheet = { kind: "round", id: rd.dataset.round }; render(); return; }
@@ -868,6 +1012,24 @@ export function start(root, { students, onSignOut }) {
       S.screen = "plan"; S.planWeek = null; S.practiceOpen = true; S.sheet = null; render();
       const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
       return;
+    }
+    if (act === "pat-test" || act === "pat-game") { patStart(act === "pat-test" ? "test" : "game"); return; }
+    if (act === "pat-shot") { patShot(); return; }
+    if (act === "pat-undo") { const P = S.pat; if (P.cur || P.c) Object.assign(P, { cur: null, c: 0, miss: "", depth: "" }); else P.shots.pop(); patSave(); render(); return; }
+    if (act === "pat-finish") { const P = S.pat; if (!P.shots.length) { toast("Hit at least one ball first, or discard the session."); return; } P.phase = "done"; P.t1 = Date.now(); P.cur = null; patSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "pat-more") {
+      const P = S.pat; P.order = P.order.slice(0, P.shots.length);
+      P.order.push(...(P.mode === "test" ? Array(5).fill(0) : gameOrder(P.clubs.length, 2).slice(0, 5)));
+      P.phase = "shoot"; patSave(); render(); window.scrollTo(0, 0); return;
+    }
+    if (act === "pat-discard") {
+      if (!a.classList.contains("armed")) { const txt = a.textContent; a.classList.add("armed"); a.textContent = "Tap again to discard"; setTimeout(() => { a.classList.remove("armed"); a.textContent = txt; }, 3500); return; }
+      S.pat = null; patSave(); render(); window.scrollTo(0, 0); return;
+    }
+    if (act === "pat-save") { patSaveSession(); return; }
+    if (act === "pat-del") {
+      if (!a.classList.contains("armed")) { a.classList.add("armed"); a.textContent = "Tap again to delete"; setTimeout(() => { a.classList.remove("armed"); a.textContent = "Delete"; }, 3500); return; }
+      await run(() => api.deleteEntry(a.dataset.id), "Session deleted"); return;
     }
     if (act === "game-ai") { tailor(); return; }
     if (act === "wedge-est") {
@@ -950,6 +1112,8 @@ export function start(root, { students, onSignOut }) {
   };
   root.onchange = async e => {
     if (e.target.id === "bagPhoto") { readBagPhoto(e.target.files[0]); e.target.value = ""; return; }
+    if (e.target.id === "pt-club") { const P = patSetup(); P.tclub = e.target.value; P.tyds = String(carryOf(P.tclub) || P.tyds); render(); return; }
+    if (/^pg-c\d$/.test(e.target.id)) { const P = patSetup(), g = P.g[+e.target.id.slice(4)]; g.club = e.target.value; g.yds = String(carryOf(g.club) || g.yds); render(); return; }
     if (e.target.dataset?.bagon != null && S.bagDraft) { S.bagDraft[+e.target.dataset.bagon].on = e.target.checked; keepBag(); render(); return; }
     if (e.target.dataset?.lvsel && S.live) { setPath(S.live.card[S.live.cur], e.target.dataset.lvsel, e.target.value); saveLive(); return; }
     const id = e.target.dataset?.task;
@@ -1026,6 +1190,8 @@ export function start(root, { students, onSignOut }) {
   root.oninput = e => {
     const id = e.target.id || "";
     if (id.startsWith("g-")) S.goalDraft[id] = e.target.value;
+    if (id === "pt-yds") patSetup().tyds = e.target.value.replace(/[^0-9]/g, "");
+    if (e.target.dataset?.pgy != null) patSetup().g[+e.target.dataset.pgy].yds = e.target.value.replace(/[^0-9]/g, "");
     if (e.target.dataset?.wd && S.wedgeDraft) { const [i, k] = e.target.dataset.wd.split("."); S.wedgeDraft.rows[+i].d[k] = e.target.value.replace(/[^0-9]/g, ""); keepWedge(); }
     if (e.target.dataset?.bag && S.bagDraft) { const [i, k] = e.target.dataset.bag.split("."); S.bagDraft[+i][k] = k === "club" ? e.target.value : e.target.value.replace(/[^0-9]/g, ""); keepBag(); }
     if (e.target.dataset?.lvin && S.live) {
