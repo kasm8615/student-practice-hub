@@ -22,7 +22,7 @@ async function signedIn(request, env) {
   });
   if (!res.ok) return false;
   const who = await res.json();
-  return !!who && (who.role === "coach" || who.role === "student");
+  return !!who && (who.role === "coach" || (who.role === "student" && who.coached !== false));
 }
 
 const clip = (v, n) => String(v ?? "").slice(0, n);

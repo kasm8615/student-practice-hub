@@ -36,6 +36,10 @@ function toCoach(p) {
     return { subject: `${first} logged practice${d.minutes ? `: ${d.minutes} min` : ""}`, lead: `${esc(name)} logged a practice session.`,
       detail: facts([["Minutes", d.minutes], ["Worked on", d.areas], ["How it went", RATING[+d.rating] || ""]]) + (d.worked ? quote(d.worked) : "") + (d.went ? quote(d.went) : "") + (d.next ? quote("Next time: " + d.next) : "") };
   }
+  if (p.type === "coaching_request") {
+    return { subject: `${first} wants to work with you`, lead: `${esc(name)} uses the practice version of the app and asked about coaching. They now share their stats with you.`,
+      detail: facts([["Email", d.email]]) + (d.note ? quote(d.note) : "") + `<p style="margin:10px 0">Open the app to see their stats, then approve them as your student or reply by email.</p>` };
+  }
   if (p.type === "goal") {
     const g = d.m3 || {};
     const lines = [["Score", g.score], ["Performance", g.perf], ["Mental", g.mental], ["Practice habit", g.process]].filter(([, v]) => v);
