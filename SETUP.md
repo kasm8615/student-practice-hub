@@ -122,3 +122,14 @@ Supabase SQL Editor → run `supabase/update-5.sql` (no values to replace). It c
 - Student videos are limited to 30 seconds. The app checks the length on the phone before uploading, and the server removes any longer clip students post. The note form tells students about both limits.
 - Files and videos are visible only to Karina and the student's own space (the student and any parent who signs in for them). Deleting a note also deletes its picture or PDF.
 - No new Cloudflare settings are needed. Redeploy (any push to GitHub).
+
+## Update 6: shot pattern (dispersion)
+
+Supabase SQL Editor → run `supabase/update-6.sql` (no values to replace). It adds the `pattern` entry type and lets students save and delete their own sessions.
+
+- Students open Rounds → **My shot pattern** (or Plan → **Shot pattern**).
+- **Range test:** one club, one target, 10 balls. **Game mode:** three clubs, a different one every ball, 15 balls.
+- After each ball they tap where it finished, rate the contact 1 to 5, and for poor strikes (1–2) pick thin, fat, toe or heel. If they can't judge the distance they pick short, pin high or long instead; left and right still come from the tap.
+- The pattern shows the spread oval, average miss, left-to-right and short-to-long spread, contact, and plain tips. Fewer than 20 shots with a club is labelled "Early read", and aim advice waits for 10 shots.
+- **On course** shows approach misses from hole-by-hole rounds as percentages (rounds record short/long/left/right, not exact spots).
+- Karina sees each club's pattern on the student's Overview.

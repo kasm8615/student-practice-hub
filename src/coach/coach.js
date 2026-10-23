@@ -7,6 +7,7 @@ import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
 import { patternLines } from "../lib/roundstats.js";
 import { carried, gapNotes, swingsFor } from "../lib/bag.js";
+import { shotsFor, clubsIn, stats as patStats, missLine, depthLine, poorLine, tips as patTips, plotSvg, legendHtml, courseSummary } from "../lib/pattern.js";
 import { trendHtml } from "../lib/trend.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, dateParts, fmtDate, shortDate, ago, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, blockDate } from "../lib/util.js";
 
@@ -267,8 +268,30 @@ export function start(root, { onSignOut }) {
         return `<div class="box"><h4>Wedge system (${w.style === "pct" ? "percent of full" : "body marks"})</h4><div class="scroll"><table class="card bag-t"><thead><tr><th></th>${swingsFor(w.style).map(([, l]) => `<th class="n">${l}</th>`).join("")}</tr></thead>
           <tbody>${(w.rows || []).map(r => `<tr><td><b>${esc(r.club)}</b></td>${swingsFor(w.style).map(([k]) => `<td class="n">${esc(r.d?.[k] || "–")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
 </div>`; })() : ""}
+      ${patternBox()}
       <div class="box"><h4>Fitness flags</h4>${flags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${flags.map(f => `<span class="pill ${f.result === "Fail" ? "bad" : "warn"}">${esc(f.name)}</span>`).join("")}</div>` : '<p style="color:var(--ink-3)">No TPI flags logged.</p>'}
         ${s.coach_notes ? `<h4 style="margin-top:14px">Coach notes (private)</h4><p style="white-space:pre-wrap">${esc(s.coach_notes)}</p>` : ""}</div>
+    </div>`;
+  }
+
+  // Shot pattern: each club's latest range shots, and approach misses from hole-by-hole rounds.
+  function patternBox() {
+    const pats = of("pattern"), cs = courseSummary(of("stat"));
+    const clubs = clubsIn(pats).filter(c => shotsFor(pats, c).length >= 3);
+    if (!clubs.length && !cs.n) return "";
+    const pct = k => Math.round(cs[k] / cs.n * 100) + "%";
+    const last = pats.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+    return `<div class="box pat-box"><h4>Shot pattern${last ? ` <span style="font-weight:400;color:var(--ink-3);text-transform:none;letter-spacing:0">last test ${esc(shortDate(last.date))}</span>` : ""}</h4>
+      ${clubs.map(c => { const sh = shotsFor(pats, c), st = patStats(sh);
+        return `<div class="pat-c">${plotSvg(sh, { st, small: true, label: `${c} shot pattern` })}<div>
+          <p><b>${esc(c)}</b> <span class="pill ${st.early ? "warn" : "neutral"}">${st.early ? "Early read · " : ""}${st.n} shots</span></p>
+          <p>Average miss: ${esc(missLine(st))}</p>
+          <p>Left to right ${Math.round(st.width)} yds · short to long ${esc(depthLine(st))}</p>
+          ${st.contact != null ? `<p>Contact ${st.contact.toFixed(1)} of 5${st.solid.n ? ` · solid within 10 yds ${st.solid.near}/${st.solid.n}` : ""}</p>` : ""}
+          ${poorLine(st) ? `<p>Poor strikes: ${esc(poorLine(st))}</p>` : ""}
+          <p class="pat-told">The app told them: ${esc(patTips(st)[0])}</p></div></div>`; }).join("")}
+      ${clubs.length ? legendHtml() : ""}
+      ${cs.n ? `<p style="margin-top:10px"><b>On the course</b> (${cs.n} approach shot${cs.n > 1 ? "s" : ""}${cs.n < 10 ? ", early read" : ""}): ${pct("G")} on the green · ${pct("S")} short · ${pct("Lg")} long · ${pct("L")} left · ${pct("R")} right</p>` : ""}
     </div>`;
   }
 

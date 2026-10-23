@@ -43,6 +43,12 @@ add(S1, "bag", { clubs: [["Driver", 225, 240], ["3 wood", 205, 218], ["4 hybrid"
     setup: { "730": { face: "open", ball: "center", grip: "down2", stance: "narrow" }, "900": { face: "square", ball: "center", grip: "down1", stance: "narrow" }, "1030": { face: "square", ball: "center", grip: "down1", stance: "normal" }, full: { face: "square", ball: "center", grip: "normal", stance: "normal" } } } }, "student");
 [[-120, "Tournament", 94, 37, 3], [-105, "Casual", 91, 35, 4], [-90, "Tournament", 92, 36, 4], [-75, "Practice round", 90, 34, 5], [-62, "Tournament", 89, 35, 5], [-40, "Tournament", 88, 33, 6], [-20, "Casual", 86, 33, 6]]
   .forEach(([o, event, score, putts, gir]) => add(S1, "stat", { date: dayOffset(o), event, course: "Renaissance Park", holes: "18", score, putts, gir, fairways: "7/14" }, "student"));
+// Shot pattern sample: a 7 iron test (solid shots drift right, fat ones come up short) and a game-mode session.
+add(S1, "pattern", { date: dayOffset(-6), mode: "test", clubs: [{ club: "7 iron", yds: "150" }], shots: [[6, -3, 5], [9, 2, 4], [3, -13, 2, "fat"], [8, -1, 4], [12, -9, 1, "fat"], [5, 3, 5], [7, 0, 4], [-2, -11, 2, "thin"], [10, 4, 4], [6, -2, 3]]
+  .map(([x, y, c, miss = ""]) => ({ club: "7 iron", yds: "150", x, y, depth: "", c, miss })) }, "student");
+add(S1, "pattern", { date: dayOffset(-3), mode: "game", clubs: [{ club: "9 iron", yds: "130" }, { club: "7 iron", yds: "150" }, { club: "6 iron", yds: "160" }],
+  shots: [["9 iron", 3, -2, 4], ["7 iron", 11, 1, 4], ["6 iron", 14, -8, 3], ["9 iron", -4, 2, 5], ["7 iron", 4, -14, 2, "fat"], ["6 iron", 9, 0, 4, "", "P"], ["9 iron", 6, -5, 3], ["7 iron", 13, -2, 4], ["6 iron", 18, -12, 2, "toe"], ["9 iron", 1, 1, 4], ["7 iron", 7, 3, 5], ["6 iron", 10, 8, 4, "", "L"], ["9 iron", 5, -1, 4], ["7 iron", -1, -9, 1, "fat"], ["6 iron", 12, -4, 3]]
+  .map(([club, x, y, c, miss = "", depth = ""]) => ({ club, yds: { "9 iron": "130", "7 iron": "150", "6 iron": "160" }[club], x, y: depth ? { S: -8, P: 0, L: 8 }[depth] : y, depth, c, miss })) }, "student");
 add(S1, "stat", { date: dayOffset(-10), event: "Casual", course: "Charlotte Golf Links", holes: "18", score: 87, fairways: "8/14", gir: 6, putts: 33 }, "student");
 add(S1, "stat", { date: dayOffset(-31), event: "Practice round", course: "Renaissance Park", holes: "18", score: 89, fairways: "7/14", gir: 5, putts: 34 });
 add(S1, "stat", { date: dayOffset(-52), event: "Casual", course: "Renaissance Park", holes: "18", score: 92, fairways: "6/14", gir: 4, putts: 36 });

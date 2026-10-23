@@ -135,3 +135,14 @@ a{color:var(--pine)}
 .tg-main{fill:none;stroke:var(--pine);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
 .tg-end{fill:var(--pine)}
 .trend-box .tr-sum,.trend-box .tr-chart,.trend-box .tr-key{max-width:560px}
+/* shot pattern target (student app and coach view) */
+.pat-svg{width:100%;max-width:420px;display:block;margin:0 auto;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.pat-svg.sm{max-width:180px;margin:0}
+#patTarget{cursor:crosshair}
+.pat-key{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;font-size:12px;color:var(--ink-3)}
+.pat-key span{display:inline-flex;align-items:center;gap:5px}
+.pat-key .k{width:11px;height:11px;border-radius:50%;display:inline-block}
+.pat-key .k.solid{background:var(--pine)}
+.pat-key .k.ok{border:2.5px solid var(--pine);background:var(--surface)}
+.pat-key .k.poor{background:var(--a3)}
+.pat-key .k.avg{width:auto;height:auto;border-radius:0;font-style:normal;font-weight:700;color:var(--ink);line-height:1}
