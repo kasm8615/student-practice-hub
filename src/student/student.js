@@ -113,6 +113,10 @@ export function start(root, { students, onSignOut }) {
     return { games, focus, why: pin ? "Picked from your round review." : auto?.why || "" };
   };
   const firstName = () => String(S.profile?.name || "").split(/\s+/)[0];
+  // Practice version (newsletter sign-ups): no lessons, notes, video or AI, and Karina only sees their stats if they share.
+  const isSolo = () => ((S.profile && S.profile.id === S.sid && S.profile.kind) || S.students.find(s => s.id === S.sid)?.kind) === "solo";
+  const sharing = () => !isSolo() || !!S.profile?.share_with_coach;
+  const seen = txt => (sharing() ? txt : "");
 
   // ---------- pieces
   function top(title, sub) {
@@ -150,14 +154,24 @@ export function start(root, { students, onSignOut }) {
     const avg = recent.length ? (recent.reduce((a, r) => a + +r.score, 0) / recent.length).toFixed(1) : null;
     const dateLine = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
     return top(`Hi, ${firstName()}`, dateLine) + `<main class="s-content">
+      ${isSolo() && S.profile?.founding ? `<div class="founding"><span aria-hidden="true">★</span> Founding golfer</div>` : ""}
+      ${isSolo() && !draft.get(`${S.sid}.welcomed`) ? `<section class="card welcome"><h2>Welcome from Karina</h2>
+        <p>I built this app for my own students, and you're one of the first golfers outside my lessons to use it. Start with these three:</p>
+        <ol><li><b>Set a goal</b> so the app knows what you're working toward.</li><li><b>Get a practice game</b> before your next range session.</li><li><b>Track your next round hole by hole.</b> Your stats then pick what to practice.</li></ol>
+        <button class="btn primary" data-act="welcome-done">Let's go</button></section>` : ""}
       <section class="thought"><span>Today's thought</span><p>${esc(quoteOfTheDay())}</p></section>
+      ${isSolo() ? (() => { const wk = weekDates(weekStartOf()), ss = sessions().filter(x => wk.includes(String(x.date))), mn = ss.reduce((a, x) => a + (+x.minutes || 0), 0);
+        return `<section class="card week-card"><h2>This week's practice <span>${esc(weekLabel(weekStartOf()))}</span></h2>
+        <div class="big-n">${mn}<small> min logged</small></div>
+        <div class="dots">${wk.map(dt => { const on = ss.some(x => String(x.date) === dt); return `<div class="${on ? "on" : ""} ${dt === td ? "today" : ""}"><b>${on ? "✓" : dayNum(dt)}</b>${dayName(dt)}</div>`; }).join("")}</div>
+        ${ss.length ? "" : `<p style="margin:0;font-size:13px;opacity:.85">Log your first practice and watch this week fill up.</p>`}</section>`; })() : `
       <section class="card week-card"><h2>This week's practice <span>${esc(weekLabel(weekStartOf()))}</span></h2>
         <div class="big-n">${m.done}<small> / ${m.planned} min</small></div>
         <div class="bar"><i style="width:${m.pct}%"></i></div>
         <div class="dots">${weekDates(weekStartOf()).map(dt => { const b = p.filter(x => blockDate(x) === dt); const on = b.length && b.every(x => x.done); return `<div class="${on ? "on" : ""} ${dt === td ? "today" : ""} ${b.length ? "" : "rest"}"><b>${on ? "✓" : dayNum(dt)}</b>${dayName(dt)}</div>`; }).join("")}</div>
-      </section>
-      <section class="card"><h2>Today <span>${todays.reduce((a, x) => a + (+x.minutes || 0), 0) || ""}${todays.length ? " min" : ""}</span></h2>
-        ${todays.map(task).join("") || `<p class="muted">Nothing planned today. Rest, or get ahead on tomorrow.</p>`}</section>
+      </section>`}
+      ${isSolo() ? "" : `<section class="card"><h2>Today <span>${todays.reduce((a, x) => a + (+x.minutes || 0), 0) || ""}${todays.length ? " min" : ""}</span></h2>
+        ${todays.map(task).join("") || `<p class="muted">Nothing planned today. Rest, or get ahead on tomorrow.</p>`}</section>`}
       ${lesson ? `<section class="card"><h2>Homework from Karina</h2><div class="hw">${esc(lesson.homework)}<div class="from">From your ${esc(shortDate(lesson.date))} lesson${lesson.focus ? " · " + esc(lesson.focus) : ""}</div></div></section>` : ""}
       <section class="card"><h2>Your season</h2>
         ${S.profile?.next_lesson || avg ? `<div class="goal-row">${S.profile?.next_lesson ? `<div><div class="l">Next lesson</div><div class="v">${esc(fmtDate(S.profile.next_lesson).replace(/, \d{4}$/, ""))}</div></div>` : "<div></div>"}${avg ? `<div style="text-align:right"><div class="l">Avg of last ${recent.length}</div><div class="v">${avg}</div></div>` : ""}</div>` : ""}
@@ -168,15 +182,23 @@ export function start(root, { students, onSignOut }) {
       </section>
       <button class="btn primary" data-go="games">Get a practice game</button>
       <button class="btn" data-act="practice">Log today's practice</button>
-      <div class="row2"><button class="btn" data-act="log">Log a round</button><button class="btn" data-go="notes">Send Karina a swing</button></div>
+      <div class="row2"><button class="btn" data-act="log">Log a round</button>${isSolo() ? `<button class="btn" data-go="pattern">Shot pattern test</button>` : `<button class="btn" data-go="notes">Send Karina a swing</button>`}</div>
+      ${isSolo() ? coachCard() : ""}
     </main>`;
+  }
+  // Practice version: the way to ask Karina about lessons.
+  function coachCard() {
+    const at = S.profile?.coaching_request_at;
+    if (at) return `<section class="card coach-ask sent"><h2>Work with Karina</h2><p>Request sent ${esc(shortDate(at))}. Karina will email you. She can see your stats now, so she'll know where you are.</p></section>`;
+    return `<section class="card coach-ask"><h2>Want a coach's eye?</h2><p>Karina coaches in Charlotte. Ask about lessons and she'll look at your stats before she gets back to you.</p>
+      <button class="btn" data-act="coach-ask">Work with Karina</button></section>`;
   }
   function planScreen() {
     const ws = S.planWeek || weekStartOf(), cur = ws === weekStartOf(), td = today();
     const m = mins(ws), p = plan(ws);
     const rel = cur ? "This week" : ws === addDays(weekStartOf(), 7) ? "Next week" : ws === addDays(weekStartOf(), -7) ? "Last week" : "";
     const weekNav = `<div class="week-nav"><button class="btn" data-pweek="-7" aria-label="Previous week">‹</button><div><b>${esc(weekLabel(ws))}</b>${rel ? `<small>${rel}</small>` : ""}</div><button class="btn" data-pweek="7" aria-label="Next week">›</button></div>`;
-    const planPart = weekNav + (!p.length ? `<div class="card"><p class="muted">${cur ? "Karina hasn't set this week's plan yet. You can still log what you practice below." : "No plan for this week."}</p></div>` : `
+    const planPart = weekNav + (!p.length ? `<div class="card"><p class="muted">${isSolo() ? "Pick a practice game or the shot dealer above, then log what you did below." : cur ? "Karina hasn't set this week's plan yet. You can still log what you practice below." : "No plan for this week."}</p></div>` : `
       <section class="card"><h2>Progress <span>${m.done} of ${m.planned} min · ${m.pct}%</span></h2><div class="bar plain"><i style="width:${m.pct}%"></i></div></section>
       <section class="card"><h2>What you're working on</h2>${focusBar(p, x => x.minutes, x => x.area)}</section>
       ${weekDates(ws).map(dt => { const b = p.filter(x => blockDate(x) === dt); if (!b.length) return ""; return `<section class="card ${dt === td ? "is-today" : ""}"><h2>${dayName(dt)}, ${esc(shortDate(dt))}${dt === td ? " · today" : ""} <span>${b.reduce((a, x) => a + (+x.minutes || 0), 0)} min</span></h2>${b.map(task).join("")}</section>`; }).join("")}
@@ -192,7 +214,7 @@ export function start(root, { students, onSignOut }) {
     const wk = all.filter(x => String(x.date) >= ws);
     const wmin = wk.reduce((a, x) => a + (+x.minutes || 0), 0);
     return `<section class="card" id="practice-log"><h2>Practice log <span>${wk.length ? `This week: ${wk.length} session${wk.length > 1 ? "s" : ""} · ${wmin} min` : ""}</span></h2>
-      <p class="muted">After every practice, write down what you worked on and how it went. It's the fastest way to see what's working, and Karina reads every one.</p>
+      <p class="muted">After every practice, write down what you worked on and how it went. It's the fastest way to see what's working${seen(", and Karina reads every one")}.</p>
       ${S.practiceOpen ? practiceForm() : `<button class="btn primary" data-act="practice">+ Log a practice</button>`}
       ${all.slice(0, 12).map(sessionRow).join("") || (S.practiceOpen ? "" : `<p class="muted">No practice logged yet.</p>`)}
       ${all.length > 12 ? `<p class="muted">Showing your last 12 sessions.</p>` : ""}</section>`;
@@ -250,7 +272,7 @@ export function start(root, { students, onSignOut }) {
       <div class="row2"><button class="btn" data-act="game-shuffle">Different games</button>${S.aiAvailable ? `<button class="btn" data-act="game-ai" ${G.aiBusy ? "disabled" : ""}>${G.aiBusy ? "Thinking…" : ai ? "Tailor again" : "✨ Tailor to me"}</button>` : "<span></span>"}</div>
       <button class="btn primary" data-act="game-log">Done? Log this practice</button>`
       : `<div class="card"><p class="muted">No games for that choice yet. Try another place or more time.</p></div>`}
-      <p class="muted" style="text-align:center">Targets are set for your level. Write your scores in the practice log so Karina can see them.</p>
+      <p class="muted" style="text-align:center">Targets are set for your level. Write your scores in the practice log${seen(" so Karina can see them")}.</p>
     </main>`;
   }
 
@@ -370,23 +392,27 @@ export function start(root, { students, onSignOut }) {
     }
     const P = patSetup();
     const hist = byDateDesc(pats).slice(0, 10);
-    return top("Shot pattern", S.profile?.name || "") + `<main class="s-content">
-      <section class="card"><h2>Where your shots finish</h2>
-        <div class="pick seg3">${[["test", "Range test"], ["game", "Game mode"], ["course", "On course"]].map(([k, l]) => `<button type="button" class="pick-btn" data-psrc="${k}" aria-pressed="${src === k}">${l}</button>`).join("")}</div>
-        ${view}</section>
-      <section class="card"><h2>Range test <span>${TEST_SHOTS} balls</span></h2>
-        <p class="muted">One club, one target, every ball. This is your baseline. Do your full routine on every shot.</p>
+    const results = `<section class="card pat-results"><h2>Your results</h2>
+        <div class="pick seg3" role="tablist" aria-label="Which results">${[["test", "Test"], ["game", "Game"], ["course", "On course"]].map(([k, l]) => `<button type="button" class="pick-btn" role="tab" data-psrc="${k}" aria-pressed="${src === k}">${l}</button>`).join("")}</div>
+        <p class="muted">${{ test: "From your range tests: one club, every ball.", game: "From game mode: clubs changing every ball. Expect a wider pattern than the test.", course: "From your hole-by-hole rounds." }[src]}</p>
+        ${view}</section>`;
+    const start = `<h2 class="pat-start-h">Start a session</h2>
+      <section class="card pat-mode test"><div class="pat-mode-top"><span class="pat-ico" aria-hidden="true"><i class="t0"></i><i class="t0"></i><i class="t0"></i></span><div><h3>Range test</h3><p>Same club, every ball · ${TEST_SHOTS} balls</p></div></div>
+        <p class="muted">Your baseline. One club, one target, full routine on every shot.</p>
         <div class="pat-setup"><label>Club ${clubSelect("pt-club", P.tclub)}</label><label>Target (yds) <input id="pt-yds" class="lv-num" inputmode="numeric" value="${esc(P.tyds)}" placeholder="yds"></label></div>
         <button class="btn primary" data-act="pat-test">Start the test</button></section>
-      <section class="card"><h2>Game mode <span>${GAME_SHOTS} balls</span></h2>
-        <p class="muted">Three clubs, a new one every ball, like the course. Your pattern will look wider than in the test. That's the honest one.</p>
-        ${P.g.map((g, i) => `<div class="pat-setup"><label>Club ${i + 1} ${clubSelect("pg-c" + i, g.club)}</label><label>Target (yds) <input id="pg-y${i}" data-pgy="${i}" class="lv-num" inputmode="numeric" value="${esc(g.yds)}" placeholder="yds"></label></div>`).join("")}
-        <button class="btn" data-act="pat-game">Start game mode</button></section>
+      <section class="card pat-mode game"><div class="pat-mode-top"><span class="pat-ico" aria-hidden="true"><i class="g0"></i><i class="g1"></i><i class="g2"></i></span><div><h3>Game mode</h3><p>New club every ball · ${GAME_SHOTS} balls</p></div></div>
+        <p class="muted">Like the course: the app tells you which club to hit next and you never hit the same one twice in a row.</p>
+        ${P.g.map((g, i) => `<div class="pat-setup"><label><span class="pat-gl"><i class="g${i}"></i>Club ${i + 1}</span>${clubSelect("pg-c" + i, g.club)}</label><label>Target (yds) <input id="pg-y${i}" data-pgy="${i}" class="lv-num" inputmode="numeric" value="${esc(g.yds)}" placeholder="yds"></label></div>`).join("")}
+        <button class="btn primary game" data-act="pat-game">Start game mode</button></section>`;
+    const anyData = pats.length || cAll.n;
+    return top("Shot pattern", S.profile?.name || "") + `<main class="s-content">
+      ${anyData ? results + start : start + results}
       ${hist.length ? `<section class="card"><h2>Your sessions</h2>${hist.map(h => { const sh = Array.isArray(h.shots) ? h.shots : [], st = patStats(sh), d = dateParts(h.date);
         return `<div class="round pat-hist"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
           <span style="min-width:0"><span style="font-weight:600;display:block">${h.mode === "game" ? "Game mode" : "Test"} · ${esc(sortClubs(sh.map(s => s.club)).join(", "))}</span><span class="meta">${sh.length} shots${st.contact != null ? ` · contact ${st.contact.toFixed(1)}` : ""}${st.n ? ` · ${esc(missLine(st))}` : ""}</span></span>
           ${h.author === "student" ? `<button class="linkbtn" data-act="pat-del" data-id="${esc(h.id)}">Delete</button>` : ""}</div>`; }).join("")}</section>` : ""}
-      <p class="muted" style="text-align:center">Karina sees your shot patterns.</p></main>`;
+      ${sharing() ? `<p class="muted" style="text-align:center">Karina sees your shot patterns.</p>` : ""}</main>`;
   }
   function patShootHtml() {
     const P = S.pat, k = P.shots.length, total = P.order.length, tgt = P.clubs[P.order[Math.min(k, total - 1)]];
@@ -394,8 +420,10 @@ export function start(root, { students, onSignOut }) {
     const rate = `<div class="pat-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="pick-btn" data-pc="${n}" aria-pressed="${P.c === n}" aria-label="${n}, ${CONTACT_LABEL[n]}">${n}</button>`).join("")}</div>
       <div class="pat-ends"><span>Thin or fat</span><span>Pure</span></div>`;
     return top("Shot pattern", P.mode === "game" ? "Game mode" : "Range test") + `<main class="s-content">
-      <div class="deal-stats"><span><b>${k + 1}/${total}</b>Shot</span><span><b>${esc(tgt.club)}</b>Club</span><span><b>${esc(tgt.yds || "–")}</b>Yards</span><span><b>${st.contact != null ? st.contact.toFixed(1) : "–"}</b>Contact</span></div>
-      ${P.mode === "game" ? `<p class="pat-next">Next: <b>${esc(tgt.club)}</b>${tgt.yds ? ` to ${esc(tgt.yds)} yds` : ""}. New club, full routine.</p>` : ""}
+      ${P.mode === "game" ? (() => { const gi = P.order[Math.min(k, total - 1)], prev = k ? P.order[k - 1] : null;
+        return `<div class="pat-club g${gi}" role="status"><small>${prev == null ? "First club" : prev !== gi ? "Switch clubs" : "Same club"} · shot ${k + 1} of ${total}</small><b>${esc(tgt.club)}</b><span>${tgt.yds ? `${esc(tgt.yds)} yds · ` : ""}Full routine before you hit</span></div>`; })()
+        : `<div class="pat-club test"><small>Range test · shot ${k + 1} of ${total}</small><b>${esc(tgt.club)}</b><span>${tgt.yds ? `${esc(tgt.yds)} yds · ` : ""}Same club, same target</span></div>`}
+      <p class="pat-plot-h">Your ${esc(tgt.club)}${P.mode === "game" ? " in this game" : ""} so far</p>
       <section class="card pat-card">${plotSvg(mine, { st, pending: P.cur, id: "patTarget", label: "Target. Tap where the ball finished." })}${legendHtml()}</section>
       <section class="card">
         <p class="pat-step">${P.cur ? "Now rate the contact, then save the shot." : "Tap the target where the ball finished."}</p>
@@ -432,14 +460,16 @@ export function start(root, { students, onSignOut }) {
     const tgt = P.clubs[P.order[P.shots.length]];
     P.shots.push({ club: tgt.club, yds: tgt.yds, x: P.cur.x, y: P.depth ? DEPTH_Y[P.depth] : P.cur.y, depth: P.depth, c: P.c, miss: P.c <= 2 ? P.miss : "" });
     Object.assign(P, { cur: null, c: 0, miss: "", depth: "" });
-    if (P.shots.length >= P.order.length) { P.phase = "done"; P.t1 = Date.now(); window.scrollTo(0, 0); }
+    if (P.shots.length >= P.order.length) { P.phase = "done"; P.t1 = Date.now(); }
     patSave(); render();
+    // Back to the top so the next club (game mode) can't be missed.
+    window.scrollTo({ top: 0, behavior: P.phase === "done" ? "auto" : "smooth" });
   }
   async function patSaveSession() {
     const P = S.pat;
     if (P.shots.length < 3) { toast("Hit at least 3 balls before saving."); return; }
     const d = { date: today(), mode: P.mode, clubs: P.clubs, shots: P.shots };
-    const ok = await run(() => api.addEntry(S.sid, "pattern", d), "Shot pattern saved. Karina will see it.");
+    const ok = await run(() => api.addEntry(S.sid, "pattern", d), "Shot pattern saved." + seen(" Karina will see it."));
     if (!ok) return;
     const clubs = sortClubs(P.clubs.map(c => c.club));
     const mins = Math.max(5, Math.min(120, Math.round(((P.t1 || Date.now()) - P.t0) / 60000)));
@@ -518,7 +548,7 @@ export function start(root, { students, onSignOut }) {
           ${GOAL_FIELDS.map(f => `<div class="field"><label for="g-${pk}-${f.k}">${f.l} <small>${f.hint}</small></label><textarea id="g-${pk}-${f.k}" rows="2" placeholder="${esc(f.ph[pk])}">${esc(val(pk, f.k))}</textarea></div>`).join("")}
         </section>`).join("")}
         <button type="submit" class="btn primary">Save my goals</button>
-        ${g.updated_at ? `<p class="muted" style="text-align:center">Last saved ${esc(shortDate(g.updated_at))}. Karina sees your goals.</p>` : `<p class="muted" style="text-align:center">Karina will see your goals and can add a note.</p>`}
+        ${g.updated_at ? `<p class="muted" style="text-align:center">Last saved ${esc(shortDate(g.updated_at))}.${seen(" Karina sees your goals.")}</p>` : !sharing() ? "" : `<p class="muted" style="text-align:center">Karina will see your goals and can add a note.</p>`}
       </form>
       <section class="card"><h2>What does your score goal take?</h2>
         <div class="calc"><label for="calc">Target score (18 holes)</label><input id="calc" type="number" inputmode="numeric" min="70" max="110" value="${esc(S.calc)}"></div>
@@ -576,7 +606,7 @@ export function start(root, { students, onSignOut }) {
         <div class="row2"><button type="button" class="btn" data-act="wedge-est">Estimate from full</button><button type="button" class="btn" data-act="wedge-row">+ Add wedge</button></div>
         <p class="muted">Fill "Full" for each wedge (or save your full bag first), then Estimate. Estimates are a starting point: hit 5 balls with each swing at the range and write what really carries.</p>
         <button class="btn primary" type="submit">Save my wedge system</button>
-        ${myWedges() ? `<p class="muted" style="text-align:center">Saved. Karina sees your wedge system.</p>` : ""}
+        ${myWedges() ? `<p class="muted" style="text-align:center">Saved.${seen(" Karina sees your wedge system.")}</p>` : ""}
       </form>
       <button class="btn" data-act="wedge-practice">Practice it: Wedge distance ladder</button>
     </main>`;
@@ -603,7 +633,7 @@ export function start(root, { students, onSignOut }) {
         <button type="button" class="linkbtn" data-act="bag-add">+ Add a club</button>
         <p class="muted">Carry = where the ball lands. Total = where it stops. Untick clubs you don't carry. Use your normal, solid shot, not your best one.</p>
         <button class="btn primary" type="submit">Save my bag</button>
-        ${e ? `<p class="muted" style="text-align:center">Last saved ${esc(shortDate(e.updated_at))}. Karina sees your distances.</p>` : ""}
+        ${e ? `<p class="muted" style="text-align:center">Last saved ${esc(shortDate(e.updated_at))}.${seen(" Karina sees your distances.")}</p>` : ""}
       </form>
       ${c.length ? `<section class="card"><h2>Your gapping</h2><div class="gaps">${c.map(x => `<div class="gap-row"><span>${esc(x.club)}</span><i style="width:${Math.max(8, x.carry / max * 100)}%"></i><b>${x.carry}</b></div>`).join("")}</div>
         ${notes.map(n => `<p class="gap-note">${esc(n)}</p>`).join("")}</section>` : ""}
@@ -791,7 +821,7 @@ export function start(root, { students, onSignOut }) {
     </main>`;
   }
   function nav() {
-    const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]];
+    const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]].filter(([k]) => !isSolo() || !["lessons", "notes"].includes(k));
     return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", live: "rounds", bag: "rounds", pattern: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
@@ -804,8 +834,18 @@ export function start(root, { students, onSignOut }) {
       return wrap("Account", `<h2>${esc(S.profile?.name || "")}</h2>
         ${S.students.length > 1 ? `<p>Switch player</p>${S.students.map(s => `<button class="menu-item" data-switch="${esc(s.id)}" aria-current="${s.id === S.sid}">${esc(s.name)}<span>${s.id === S.sid ? "✓" : "›"}</span></button>`).join("")}` : ""}
         <button class="menu-item" data-go="bag">My club distances<span>›</span></button>
+        ${isSolo() ? `<div class="share-row"><div><b>Let Karina see my stats</b><small>${S.profile?.share_with_coach ? "On. Karina can see your rounds, practice and goals so she can send you tips." : "Off. Your stats are private. Karina only sees how many golfers use the app."}</small></div>
+          <button class="toggle" role="switch" aria-checked="${!!S.profile?.share_with_coach}" data-act="share-toggle" aria-label="Let Karina see my stats"><i></i></button></div>
+          ${S.profile?.coaching_request_at ? "" : `<button class="menu-item" data-act="coach-ask">Work with Karina<span>›</span></button>`}` : ""}
         <p>Tip: add this app to your home screen. On iPhone, tap Share, then "Add to Home Screen".</p>
-        <button class="btn" data-act="signout">Sign out</button><button class="btn" data-close="1">Close</button>`);
+        <button class="btn" data-act="signout">Sign out</button><button class="btn" data-close="1">Close</button>
+        ${isSolo() ? `<button class="linkbtn danger-link" data-act="del-account">Delete my account and all my data</button>` : ""}`);
+    }
+    if (sh.kind === "coach-ask") {
+      return wrap("Work with Karina", `<h2>Work with Karina</h2>
+        <p>Tell Karina a little about your game and what you'd like help with. Sending this lets her see your stats, so she can look before she replies. She'll answer by email.</p>
+        <textarea id="ca-note" rows="4" maxlength="1000" placeholder="I'm stuck around 95 and my irons go right."></textarea>
+        <button class="btn primary" data-act="coach-send">Send to Karina</button><button class="btn" data-close="1">Not now</button>`);
     }
     if (sh.kind === "round") {
       const r = S.entries.find(e => e.id === sh.id);
@@ -1013,6 +1053,24 @@ export function start(root, { students, onSignOut }) {
       const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
       return;
     }
+    if (act === "welcome-done") { draft.set(`${S.sid}.welcomed`, true); render(); return; }
+    if (act === "coach-ask") { S.sheet = { kind: "coach-ask" }; render(); setTimeout(() => root.querySelector("#ca-note")?.focus(), 50); return; }
+    if (act === "coach-send") {
+      const note = (root.querySelector("#ca-note")?.value || "").trim();
+      S.sheet = null; render();
+      await run(() => api.requestCoaching(S.sid, note), "Sent. Karina will email you.");
+      return;
+    }
+    if (act === "share-toggle") {
+      const on = !S.profile?.share_with_coach;
+      await run(() => api.setSharing(S.sid, on), on ? "Karina can now see your stats." : "Your stats are private again.");
+      S.sheet = { kind: "menu" }; render(); return;
+    }
+    if (act === "del-account") {
+      if (!a.classList.contains("armed")) { a.classList.add("armed"); a.textContent = "Tap again to delete everything. This can't be undone."; setTimeout(() => { a.classList.remove("armed"); a.textContent = "Delete my account and all my data"; }, 5000); return; }
+      try { await api.deletePracticeAccount(S.sid); } catch (err) { toast(friendly(err)); return; }
+      if (stopWatch) stopWatch(); await api.signOut(); document.body.style.overflow = ""; root.onclick = root.onchange = root.onsubmit = root.oninput = null; onSignOut(); return;
+    }
     if (act === "pat-test" || act === "pat-game") { patStart(act === "pat-test" ? "test" : "game"); return; }
     if (act === "pat-shot") { patShot(); return; }
     if (act === "pat-undo") { const P = S.pat; if (P.cur || P.c) Object.assign(P, { cur: null, c: 0, miss: "", depth: "" }); else P.shots.pop(); patSave(); render(); return; }
@@ -1159,7 +1217,7 @@ export function start(root, { students, onSignOut }) {
       const f = k => root.querySelector("#p-" + k).value.trim();
       const d = { date: f("date") || today(), minutes: f("min") === "" || isNaN(+f("min")) ? "" : +f("min"), areas: S.sess.areas, ...(S.sess.games ? { games: S.sess.games } : {}), ...(S.sess.dealer ? { dealer: S.sess.dealer } : {}), ...(S.sess.week && S.sess.week !== "normal" ? { week: S.sess.week } : {}), rating: S.sess.rating || "", worked: f("worked"), went: f("went"), next: f("next") };
       if (!d.worked && !d.went && !d.areas.length && d.minutes === "") { toast("Add what you practiced first."); return; }
-      const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved. Karina will see it.");
+      const ok = await run(() => api.addEntry(S.sid, "session", d), "Practice saved." + seen(" Karina will see it."));
       if (ok) { clearDrafts("practiceForm"); S.practiceOpen = false; S.sess = { areas: [], rating: 0 }; render(); }
     }
     if (e.target.id === "goalForm") {
@@ -1167,7 +1225,7 @@ export function start(root, { students, onSignOut }) {
       const d = {};
       GOAL_PERIODS.forEach(([pk]) => { d[pk] = {}; GOAL_FIELDS.forEach(f => { d[pk][f.k] = root.querySelector(`#g-${pk}-${f.k}`).value.trim(); }); });
       if (!GOAL_PERIODS.some(([pk]) => GOAL_FIELDS.some(f => d[pk][f.k]))) { toast("Write at least one goal first."); return; }
-      const ok = await run(() => g ? api.updateEntry(g, d) : api.addEntry(S.sid, "goal", d), "Goals saved. Karina will see them.");
+      const ok = await run(() => g ? api.updateEntry(g, d) : api.addEntry(S.sid, "goal", d), "Goals saved." + seen(" Karina will see them."));
       if (ok) { clearDrafts("goalForm"); S.goalDraft = {}; render(); }
     }
     if (e.target.id === "noteForm") {
@@ -1210,6 +1268,6 @@ export function start(root, { students, onSignOut }) {
 
   bindPlayer(root);
   api.touchSeen();
-  api.tailorAvailable().then(v => { S.aiAvailable = v; if (S.screen === "games" || S.screen === "dealer") render(); }).catch(() => { S.aiAvailable = false; });
+  api.tailorAvailable().then(v => { S.aiAvailable = v && !isSolo(); if (S.screen === "games" || S.screen === "dealer") render(); }).catch(() => { S.aiAvailable = false; });
   select(S.sid);
 }

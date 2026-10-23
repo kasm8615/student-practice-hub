@@ -133,3 +133,27 @@ Supabase SQL Editor → run `supabase/update-6.sql` (no values to replace). It a
 - The pattern shows the spread oval, average miss, left-to-right and short-to-long spread, contact, and plain tips. Fewer than 20 shots with a club is labelled "Early read", and aim advice waits for 10 shots.
 - **On course** shows approach misses from hole-by-hole rounds as percentages (rounds record short/long/left/right, not exact spots).
 - Karina sees each club's pattern on the student's Overview.
+
+## Update 7: the practice version (newsletter sign-ups)
+
+Anyone with the newsletter link can create a free practice-version account. Karina's coached students keep everything as before.
+
+1. **Database:** Supabase SQL Editor → run `supabase/update-7.sql` (no values to replace).
+2. **Pick a sign-up code** (a word, e.g. `founders`) and run this one line in the SQL Editor with your word in place of `founders`:
+   `update private.settings set value = 'founders' where key = 'join_code';`
+   Until this is set, sign-ups stay closed. To close sign-ups later, or start a new group, run it again with a new word.
+3. **The newsletter link** is `https://app.karinagolfcoaching.com/?join=founders` (same word as step 2).
+4. **Sign-in emails:** every new sign-up gets a code email through Resend. Resend's free plan sends 100 emails a day, so upgrade before a big newsletter goes out.
+5. Redeploy (merge the pull request).
+
+What newsletter sign-ups get:
+- Practice games, shot dealer, shot pattern, round tracking and stats, goals, club distances and the practice log. No lessons, notes, video or AI.
+- A "Founding golfer" label, a welcome card, and a **Work with Karina** button.
+- Their stats are **private by default**. They can switch "Let Karina see my stats" on or off in the menu. Asking to work with Karina turns it on.
+- They must confirm they're 18 or older. They can delete their account and all their data from the menu.
+
+What Karina sees:
+- Check-in → **Practice app**: sign-ups, how many used it this week, rounds and practices logged, and how many share with her (totals only).
+- Golfers who share appear in the roster with a **Practice app** label (filter: Practice app).
+- **Coaching requests** (with their note and email) show on the check-in, and Karina gets an email. **Make my student** turns them into a coached student with the full app; **Dismiss** clears the request.
+- No emails about practice-version users' rounds or practice.

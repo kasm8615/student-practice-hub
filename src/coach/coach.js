@@ -100,14 +100,16 @@ export function start(root, { onSignOut }) {
     S.students = students;
     S.seen = Object.fromEntries(seen.map(r => [r.student_id, r.last_seen]));
   }
+  function isSolo(s) { return (s && s.kind) === "solo"; }
   async function loadStudent() {
     if (!S.sel) return;
     const [entries, scores] = await Promise.all([api.entries(S.sel), api.scores(S.sel)]);
     S.entries = entries; S.scores = scores;
   }
   async function loadWeek() {
-    const [plans, notes, drills, scores, sessions] = await Promise.all([api.entriesOfType("plan"), api.entriesOfType("note"), api.entriesOfType("drill"), api.scores(), api.entriesOfType("session")]);
+    const [plans, notes, drills, scores, sessions, practice] = await Promise.all([api.entriesOfType("plan"), api.entriesOfType("note"), api.entriesOfType("drill"), api.scores(), api.entriesOfType("session"), api.practiceSummary().catch(() => null)]);
     S.week = { plans, notes, drills, scores, sessions };
+    S.practice = practice;
   }
   async function refresh() {
     try {
@@ -127,18 +129,18 @@ export function start(root, { onSignOut }) {
     const q = S.q.toLowerCase();
     const rows = S.students
       .filter(s => S.showArchived || !s.archived)
-      .filter(s => S.filter === "All" || s.grp === S.filter)
+      .filter(s => S.filter === "All" || (S.filter === "Practice app" ? isSolo(s) : !isSolo(s) && s.grp === S.filter))
       .filter(s => !q || String(s.name).toLowerCase().includes(q));
     const unread = unreadCount();
     return `<aside class="roster" aria-label="Students">
       <div class="brand" style="flex-direction:row;align-items:center;gap:12px">${logo("c-logo")}<div style="display:flex;flex-direction:column;gap:2px"><h1>Golfers Practice Hub</h1></div></div>
       <button class="nav-btn" data-view="checkin" aria-current="${S.view === "checkin"}">This week's check-in ${unread ? `<span class="badge" title="New notes from students">${unread}</span>` : ""}</button>
       <input id="search" class="search" type="search" placeholder="Search students" aria-label="Search students" value="${esc(S.q)}">
-      <div class="filters" role="group" aria-label="Filter">${["All", "Junior", "Adult"].map(f => `<button class="chip" data-filter="${f}" aria-pressed="${S.filter === f}">${f === "All" ? "All" : f + "s"}</button>`).join("")}</div>
+      <div class="filters" role="group" aria-label="Filter">${["All", "Junior", "Adult", ...(S.students.some(isSolo) ? ["Practice app"] : [])].map(f => `<button class="chip" data-filter="${f}" aria-pressed="${S.filter === f}">${f === "All" || f === "Practice app" ? f : f + "s"}</button>`).join("")}</div>
       <ul class="student-list">${!S.students.length ? `<li class="empty-roster">No students yet. Add your first one below.</li>` : !rows.length ? `<li class="empty-roster">No students match.</li>` :
         rows.map(s => `<li><button class="student-btn" data-sid="${esc(s.id)}" aria-current="${S.view === "student" && s.id === S.sel}">
           <span class="avatar ${s.grp === "Junior" ? "junior" : ""}">${esc(initials(s.name))}</span>
-          <span><span class="s-name">${esc(s.name)}</span><br><span class="s-meta">${s.archived ? `<span class="archived">Archived</span>` : esc(s.grp || "")}${s.program ? " · " + esc(s.program) : ""}</span></span>
+          <span><span class="s-name">${esc(s.name)}</span><br><span class="s-meta">${s.archived ? `<span class="archived">Archived</span>` : isSolo(s) ? `<span class="pill-app">Practice app</span>${s.coaching_request_at ? " · wants coaching" : ""}` : esc(s.grp || "")}${s.program && !isSolo(s) ? " · " + esc(s.program) : ""}</span></span>
           <span class="hcp">${esc(s.handicap || "")}</span></button></li>`).join("")}</ul>
       <button class="btn primary" data-act="add-student">+ Add student</button>
       <div class="roster-foot"><button data-act="toggle-archived">${S.showArchived ? "Hide archived" : "Show archived"}</button><button data-act="signout">Sign out</button></div>
@@ -151,7 +153,7 @@ export function start(root, { onSignOut }) {
 
   // ---------- check-in (all students, this week)
   function checkinHtml() {
-    const active = S.students.filter(s => !s.archived);
+    const active = S.students.filter(s => !s.archived && !isSolo(s));
     const since = Date.now() - 7 * 864e5;
     const rows = active.map(s => {
       const plans = S.week.plans.filter(p => p.student_id === s.id && weekStartOf(blockDate(p)) === weekStartOf());
@@ -178,6 +180,7 @@ export function start(root, { onSignOut }) {
     const col = { good: "var(--good)", warn: "var(--warn)", bad: "var(--bad)", none: "var(--line)" };
     return `<div class="m-bar">${logo("c-logo")}<b>Golfers Practice Hub</b><button class="btn small" data-act="show-roster">Students</button><button class="btn small primary" data-act="add-student">+ Add</button></div>
       <section class="checkin">
+      ${practiceCard()}
       <div class="panel-head"><div><h3>This week's check-in</h3><p>Practice minutes against each plan, sorted by who needs you most.</p></div>
         <div class="tally"><span class="st-good">${c("good")} on track</span><span class="st-warn">${c("warn")} behind</span><span class="st-bad">${c("bad")} need a nudge</span>${c("none") ? `<span class="st-none">${c("none")} no plan</span>` : ""}</div></div>
       ${rows.length ? `<div class="crows">${rows.map(r => `<div class="crow"><span class="stripe" style="background:${col[r.st]}"></span>
@@ -190,6 +193,19 @@ export function start(root, { onSignOut }) {
         : `<div class="empty">Add your first student to start tracking practice.</div>`}
       <p style="font-size:12px;color:var(--ink-3);margin:0">"Copy reminder" copies a friendly text with their plan, ready to paste into a message. Use "Copy to next week" on each student's Practice Plan tab to plan the next week.</p>
     </section>`;
+  }
+  // Practice version (newsletter sign-ups): totals, plus anyone who asked about coaching.
+  function practiceCard() {
+    const P = S.practice;
+    if (!P || !P.signups) return "";
+    const reqs = S.students.filter(s => isSolo(s) && s.coaching_request_at).sort((a, b) => String(b.coaching_request_at).localeCompare(String(a.coaching_request_at)));
+    const k = (v, l) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+    return `<div class="practice-card"><div class="panel-head"><div><h3>Practice app</h3><p>Newsletter sign-ups. You only see names and stats for golfers who chose to share with you.</p></div></div>
+      <div class="kpis">${k(P.signups, `Signed up${P.new_week ? ` · ${P.new_week} new this week` : ""}`)}${k(P.active_week, "Used it this week")}${k(`${P.rounds_week} / ${P.practice_week}`, "Rounds / practices logged this week")}${k(P.sharing, "Sharing with you")}</div>
+      ${reqs.length ? `<h4 class="req-h">Coaching requests</h4>${reqs.map(s => `<div class="req"><div><button class="nm" data-sid="${esc(s.id)}">${esc(s.name)}</button> <span class="sub">${esc(s.email || "")} · ${esc(shortDate(s.coaching_request_at))}</span>
+          ${s.coaching_request_note ? `<p>“${esc(s.coaching_request_note)}”</p>` : ""}</div>
+        <div class="req-act"><button class="btn small" data-sid="${esc(s.id)}">See stats</button><button class="btn small primary" data-act="approve" data-id="${esc(s.id)}">Make my student</button><button class="btn small" data-act="dismiss-req" data-id="${esc(s.id)}">Dismiss</button></div></div>`).join("")}` : ""}
+    </div>`;
   }
   function reminderText(s) {
     const plans = S.week.plans.filter(p => p.student_id === s.id && !p.done && blockDate(p) >= today() && weekStartOf(blockDate(p)) === weekStartOf()).sort((a, b) => blockDate(a).localeCompare(blockDate(b)));
@@ -637,6 +653,8 @@ export function start(root, { onSignOut }) {
     }
     const a = t.dataset.act;
     if (a === "add-student") return studentForm();
+    if (a === "approve") { await write(api.updateStudent(t.dataset.id, { kind: "coached", coaching_request_at: null, program: "" }), "Added as your student. Edit their profile to add lessons and plans."); return; }
+    if (a === "dismiss-req") { await write(api.updateStudent(t.dataset.id, { coaching_request_at: null }), "Request dismissed"); return; }
     if (a === "show-roster") { S.view = "roster"; render(); window.scrollTo(0, 0); return; }
     if (a === "edit-student") return studentForm(S.students.find(x => x.id === S.sel));
     if (a === "invite") { S.invite = S.sel; render(); return; }

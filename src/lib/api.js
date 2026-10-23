@@ -9,7 +9,8 @@ export const api = {
   // ---- session
   async whoami() { return must(await supabase.rpc("whoami")); },
   async touchSeen() { await supabase.rpc("touch_seen"); },
-  async sendCode(email) { must(await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })); },
+  // extra (newsletter sign-ups only): { join, name, adult, share }. Saved with a brand-new account; ignored for existing ones.
+  async sendCode(email, extra) { must(await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, ...(extra ? { data: extra } : {}) } })); },
   async verifyCode(email, token) { return must(await supabase.auth.verifyOtp({ email, token, type: "email" })); },
   async signOut() { await supabase.auth.signOut(); },
   async user() { return (await supabase.auth.getUser()).data.user; },
@@ -20,6 +21,11 @@ export const api = {
   async addStudent(d) { return must(await supabase.from("students").insert(d).select().single()); },
   async updateStudent(id, d) { return must(await supabase.from("students").update(d).eq("id", id).select().single()); },
   async deleteStudent(id) { must(await supabase.from("students").delete().eq("id", id)); },
+  // ---- practice version
+  async setSharing(sid, share) { must(await supabase.rpc("set_sharing", { sid, share })); },
+  async requestCoaching(sid, note) { must(await supabase.rpc("request_coaching", { sid, note })); },
+  async deletePracticeAccount(sid) { must(await supabase.rpc("delete_practice_account", { sid })); },
+  async practiceSummary() { const { data, error } = await supabase.rpc("practice_summary"); return error ? null : data; },
   async lastSeen() { return must(await supabase.rpc("last_seen_by_student")); },
 
   // ---- entries

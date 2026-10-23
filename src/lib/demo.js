@@ -7,12 +7,15 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const now = () => new Date().toISOString();
 const dayOffset = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
-const S1 = "s-alex", S2 = "s-sofia", S3 = "s-marcus";
+const S1 = "s-alex", S2 = "s-sofia", S3 = "s-marcus", S4 = "s-jordan", S5 = "s-dana";
 const db = {
   students: [
     { id: S1, name: "Alex Rivera", email: "alex@example.com", grp: "Adult", handicap: "16.4", program: "Lesson package", start_date: "2026-06-02", next_lesson: dayOffset(2), goals: "Break 85 by spring. Cut 3-putts to 2 or fewer per round.", coach_notes: "Early extension. Watch lower back.", archived: false },
     { id: S2, name: "Sofia Morales", guardian_email: "parent@example.com", grp: "Junior", handicap: "9.8", program: "Private lessons", start_date: "2026-03-10", goals: "Make the high school team.", archived: false },
-    { id: S3, name: "Marcus Lee", email: "marcus@example.com", grp: "Adult", handicap: "22.0", program: "Group clinic", start_date: "2026-08-01", goals: "Consistent contact with irons.", archived: false }
+    { id: S3, name: "Marcus Lee", email: "marcus@example.com", grp: "Adult", handicap: "22.0", program: "Group clinic", start_date: "2026-08-01", goals: "Consistent contact with irons.", archived: false },
+    // Practice version (newsletter sign-ups): Jordan keeps stats private, Dana shares and asked about coaching.
+    { id: S4, name: "Jordan Park", email: "jordan@example.com", grp: "Adult", program: "Practice app", start_date: dayOffset(-4), archived: false, kind: "solo", share_with_coach: false, founding: true },
+    { id: S5, name: "Dana Brooks", email: "dana@example.com", grp: "Adult", program: "Practice app", start_date: dayOffset(-9), archived: false, kind: "solo", share_with_coach: true, founding: true, coaching_request_at: dayOffset(-1) + "T15:00:00Z", coaching_request_note: "Stuck at 95. My irons are all over the place." }
   ],
   entries: [],
   scores: [],
@@ -66,21 +69,41 @@ db.scores.push({ id: uid(), student_id: S1, drill_id: ladder.id, score: 5, out_o
 [["Tue", "Full swing", "Half swings, 7 iron", 40, false], ["Thu", "Short game", "Chipping ladder", 30, false]]
   .forEach(([day, area, title, minutes, done]) => add(S3, "plan", { day, area, title, minutes, done }));
 
+add(S5, "stat", { date: dayOffset(-5), event: "Casual", course: "Charlotte Golf Links", holes: "18", score: 96, putts: 36, gir: 3, fairways: "6/14" }, "student");
+add(S5, "session", { date: dayOffset(-2), minutes: 45, areas: ["Full swing"], rating: 3, worked: "Shot dealer, range", went: "Better with short irons" }, "student");
+add(S4, "stat", { date: dayOffset(-2), event: "Casual", course: "Renaissance Park", holes: "18", score: 101, putts: 38, gir: 2, fairways: "5/14" }, "student");
+
 const flat = r => ({ ...r.data, id: r.id, type: r.type, student_id: r.student_id, author: r.author, created_by: r.created_by, created_at: r.created_at, updated_at: r.updated_at });
-const role = new URLSearchParams(location.search).get("as") || "coach";
+const role = new URLSearchParams(location.search).get("as") || "coach"; // coach | student | solo
+const meId = role === "solo" ? S4 : S1;
+const kindOf = s => s.kind || "coached";
+const coachSees = s => kindOf(s) === "coached" || s.share_with_coach;
 let signedIn = true;
 const listeners = new Set();
 const ping = () => setTimeout(() => listeners.forEach(f => f()), 30);
 
 export const demoApi = {
-  async whoami() { return role === "coach" ? { role: "coach", students: [] } : { role: "student", students: [{ id: S1, name: "Alex Rivera" }] }; },
+  async whoami() {
+    if (role === "coach") return { role: "coach", coached: true, students: [] };
+    const me = db.students.find(s => s.id === meId);
+    return { role: "student", coached: kindOf(me) === "coached", students: [{ id: me.id, name: me.name, kind: kindOf(me) }] };
+  },
   async touchSeen() {},
   async sendCode() {},
   async verifyCode() { signedIn = true; },
   async signOut() { signedIn = false; },
-  async user() { return signedIn ? { id: "me", email: role === "coach" ? "karina@karinagolfcoaching.com" : "alex@example.com" } : null; },
-  async listStudents() { return db.students.slice().sort((a, b) => a.name.localeCompare(b.name)); },
-  async studentProfile(id) { const s = db.students.find(x => x.id === id); if (!s) return null; const { coach_notes, email, guardian_email, archived, ...rest } = s; return rest; },
+  async user() { return signedIn ? { id: "me", email: role === "coach" ? "karina@karinagolfcoaching.com" : role === "solo" ? "jordan@example.com" : "alex@example.com" } : null; },
+  async listStudents() { return db.students.filter(coachSees).map(s => ({ kind: "coached", share_with_coach: false, founding: false, ...s })).sort((a, b) => a.name.localeCompare(b.name)); },
+  async studentProfile(id) { const s = db.students.find(x => x.id === id); if (!s) return null; const { coach_notes, email, guardian_email, archived, coaching_request_note, ...rest } = s; return { kind: "coached", share_with_coach: false, founding: false, coaching_request_at: null, ...rest }; },
+  async setSharing(sid, share) { db.students.find(x => x.id === sid).share_with_coach = share; ping(); },
+  async requestCoaching(sid, note) { Object.assign(db.students.find(x => x.id === sid), { coaching_request_at: now(), coaching_request_note: note, share_with_coach: true }); ping(); },
+  async deletePracticeAccount(sid) { db.students = db.students.filter(s => s.id !== sid); db.entries = db.entries.filter(e => e.student_id !== sid); signedIn = false; },
+  async practiceSummary() {
+    const solo = db.students.filter(s => kindOf(s) === "solo"), ids = new Set(solo.map(s => s.id)), wk = Date.now() - 7 * 864e5;
+    const recent = db.entries.filter(e => ids.has(e.student_id) && Date.parse(e.created_at) > wk);
+    return { signups: solo.length + 37, new_week: 6, sharing: solo.filter(s => s.share_with_coach).length + 9, requests: solo.filter(s => s.coaching_request_at).length,
+      active_week: new Set(recent.map(e => e.student_id)).size + 14, rounds_week: recent.filter(e => e.type === "stat").length + 11, practice_week: recent.filter(e => ["session", "pattern"].includes(e.type)).length + 23 };
+  },
   async addStudent(d) { const s = { id: uid(), archived: false, ...d }; db.students.push(s); return s; },
   async updateStudent(id, d) { const s = db.students.find(x => x.id === id); Object.assign(s, d); return s; },
   async deleteStudent(id) { db.students = db.students.filter(s => s.id !== id); db.entries = db.entries.filter(e => e.student_id !== id); },
