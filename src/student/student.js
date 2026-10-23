@@ -392,18 +392,22 @@ export function start(root, { students, onSignOut }) {
     }
     const P = patSetup();
     const hist = byDateDesc(pats).slice(0, 10);
-    return top("Shot pattern", S.profile?.name || "") + `<main class="s-content">
-      <section class="card"><h2>Where your shots finish</h2>
-        <div class="pick seg3">${[["test", "Range test"], ["game", "Game mode"], ["course", "On course"]].map(([k, l]) => `<button type="button" class="pick-btn" data-psrc="${k}" aria-pressed="${src === k}">${l}</button>`).join("")}</div>
-        ${view}</section>
-      <section class="card"><h2>Range test <span>${TEST_SHOTS} balls</span></h2>
-        <p class="muted">One club, one target, every ball. This is your baseline. Do your full routine on every shot.</p>
+    const results = `<section class="card pat-results"><h2>Your results</h2>
+        <div class="pick seg3" role="tablist" aria-label="Which results">${[["test", "Test"], ["game", "Game"], ["course", "On course"]].map(([k, l]) => `<button type="button" class="pick-btn" role="tab" data-psrc="${k}" aria-pressed="${src === k}">${l}</button>`).join("")}</div>
+        <p class="muted">${{ test: "From your range tests: one club, every ball.", game: "From game mode: clubs changing every ball. Expect a wider pattern than the test.", course: "From your hole-by-hole rounds." }[src]}</p>
+        ${view}</section>`;
+    const start = `<h2 class="pat-start-h">Start a session</h2>
+      <section class="card pat-mode test"><div class="pat-mode-top"><span class="pat-ico" aria-hidden="true"><i class="t0"></i><i class="t0"></i><i class="t0"></i></span><div><h3>Range test</h3><p>Same club, every ball · ${TEST_SHOTS} balls</p></div></div>
+        <p class="muted">Your baseline. One club, one target, full routine on every shot.</p>
         <div class="pat-setup"><label>Club ${clubSelect("pt-club", P.tclub)}</label><label>Target (yds) <input id="pt-yds" class="lv-num" inputmode="numeric" value="${esc(P.tyds)}" placeholder="yds"></label></div>
         <button class="btn primary" data-act="pat-test">Start the test</button></section>
-      <section class="card"><h2>Game mode <span>${GAME_SHOTS} balls</span></h2>
-        <p class="muted">Three clubs, a new one every ball, like the course. Your pattern will look wider than in the test. That's the honest one.</p>
-        ${P.g.map((g, i) => `<div class="pat-setup"><label>Club ${i + 1} ${clubSelect("pg-c" + i, g.club)}</label><label>Target (yds) <input id="pg-y${i}" data-pgy="${i}" class="lv-num" inputmode="numeric" value="${esc(g.yds)}" placeholder="yds"></label></div>`).join("")}
-        <button class="btn" data-act="pat-game">Start game mode</button></section>
+      <section class="card pat-mode game"><div class="pat-mode-top"><span class="pat-ico" aria-hidden="true"><i class="g0"></i><i class="g1"></i><i class="g2"></i></span><div><h3>Game mode</h3><p>New club every ball · ${GAME_SHOTS} balls</p></div></div>
+        <p class="muted">Like the course: the app tells you which club to hit next and you never hit the same one twice in a row.</p>
+        ${P.g.map((g, i) => `<div class="pat-setup"><label><span class="pat-gl"><i class="g${i}"></i>Club ${i + 1}</span>${clubSelect("pg-c" + i, g.club)}</label><label>Target (yds) <input id="pg-y${i}" data-pgy="${i}" class="lv-num" inputmode="numeric" value="${esc(g.yds)}" placeholder="yds"></label></div>`).join("")}
+        <button class="btn primary game" data-act="pat-game">Start game mode</button></section>`;
+    const anyData = pats.length || cAll.n;
+    return top("Shot pattern", S.profile?.name || "") + `<main class="s-content">
+      ${anyData ? results + start : start + results}
       ${hist.length ? `<section class="card"><h2>Your sessions</h2>${hist.map(h => { const sh = Array.isArray(h.shots) ? h.shots : [], st = patStats(sh), d = dateParts(h.date);
         return `<div class="round pat-hist"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
           <span style="min-width:0"><span style="font-weight:600;display:block">${h.mode === "game" ? "Game mode" : "Test"} · ${esc(sortClubs(sh.map(s => s.club)).join(", "))}</span><span class="meta">${sh.length} shots${st.contact != null ? ` · contact ${st.contact.toFixed(1)}` : ""}${st.n ? ` · ${esc(missLine(st))}` : ""}</span></span>
@@ -416,8 +420,10 @@ export function start(root, { students, onSignOut }) {
     const rate = `<div class="pat-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="pick-btn" data-pc="${n}" aria-pressed="${P.c === n}" aria-label="${n}, ${CONTACT_LABEL[n]}">${n}</button>`).join("")}</div>
       <div class="pat-ends"><span>Thin or fat</span><span>Pure</span></div>`;
     return top("Shot pattern", P.mode === "game" ? "Game mode" : "Range test") + `<main class="s-content">
-      <div class="deal-stats"><span><b>${k + 1}/${total}</b>Shot</span><span><b>${esc(tgt.club)}</b>Club</span><span><b>${esc(tgt.yds || "–")}</b>Yards</span><span><b>${st.contact != null ? st.contact.toFixed(1) : "–"}</b>Contact</span></div>
-      ${P.mode === "game" ? `<p class="pat-next">Next: <b>${esc(tgt.club)}</b>${tgt.yds ? ` to ${esc(tgt.yds)} yds` : ""}. New club, full routine.</p>` : ""}
+      ${P.mode === "game" ? (() => { const gi = P.order[Math.min(k, total - 1)], prev = k ? P.order[k - 1] : null;
+        return `<div class="pat-club g${gi}" role="status"><small>${prev == null ? "First club" : prev !== gi ? "Switch clubs" : "Same club"} · shot ${k + 1} of ${total}</small><b>${esc(tgt.club)}</b><span>${tgt.yds ? `${esc(tgt.yds)} yds · ` : ""}Full routine before you hit</span></div>`; })()
+        : `<div class="pat-club test"><small>Range test · shot ${k + 1} of ${total}</small><b>${esc(tgt.club)}</b><span>${tgt.yds ? `${esc(tgt.yds)} yds · ` : ""}Same club, same target</span></div>`}
+      <p class="pat-plot-h">Your ${esc(tgt.club)}${P.mode === "game" ? " in this game" : ""} so far</p>
       <section class="card pat-card">${plotSvg(mine, { st, pending: P.cur, id: "patTarget", label: "Target. Tap where the ball finished." })}${legendHtml()}</section>
       <section class="card">
         <p class="pat-step">${P.cur ? "Now rate the contact, then save the shot." : "Tap the target where the ball finished."}</p>
@@ -454,8 +460,10 @@ export function start(root, { students, onSignOut }) {
     const tgt = P.clubs[P.order[P.shots.length]];
     P.shots.push({ club: tgt.club, yds: tgt.yds, x: P.cur.x, y: P.depth ? DEPTH_Y[P.depth] : P.cur.y, depth: P.depth, c: P.c, miss: P.c <= 2 ? P.miss : "" });
     Object.assign(P, { cur: null, c: 0, miss: "", depth: "" });
-    if (P.shots.length >= P.order.length) { P.phase = "done"; P.t1 = Date.now(); window.scrollTo(0, 0); }
+    if (P.shots.length >= P.order.length) { P.phase = "done"; P.t1 = Date.now(); }
     patSave(); render();
+    // Back to the top so the next club (game mode) can't be missed.
+    window.scrollTo({ top: 0, behavior: P.phase === "done" ? "auto" : "smooth" });
   }
   async function patSaveSession() {
     const P = S.pat;
