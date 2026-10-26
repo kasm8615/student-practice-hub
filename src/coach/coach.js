@@ -217,7 +217,7 @@ export function start(root, { onSignOut }) {
 
   // ---------- student space
   const of = t => S.entries.filter(e => e.type === t);
-  const sortDateDesc = a => a.slice().sort((x, y) => String(y.date || y.created_at || "").localeCompare(String(x.date || x.created_at || "")));
+  const sortDateDesc = a => a.slice().sort((x, y) => String(y.date || y.created_at || "").localeCompare(String(x.date || x.created_at || "")) || String(y.created_at || "").localeCompare(String(x.created_at || "")));
   const scoresFor = id => S.scores.filter(s => s.drill_id === id).sort((a, b) => (a.scored_on + a.created_at).localeCompare(b.scored_on + b.created_at));
 
   function studentHtml() {
@@ -285,6 +285,9 @@ export function start(root, { onSignOut }) {
         return `<div class="box"><h4>Wedge system (${w.style === "pct" ? "percent of full" : "body marks"})</h4><div class="scroll"><table class="card bag-t"><thead><tr><th></th>${swingsFor(w.style).map(([, l]) => `<th class="n">${l}</th>`).join("")}</tr></thead>
           <tbody>${(w.rows || []).map(r => `<tr><td><b>${esc(r.club)}</b></td>${swingsFor(w.style).map(([k]) => `<td class="n">${esc(r.d?.[k] || "–")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
 </div>`; })() : ""}
+      ${(() => { const sp = of("bag")[0]?.speeds; if (!sp || !Object.keys(sp).length) return "";
+        return `<div class="box"><h4>Speed chart (Speed dial)</h4><div class="scroll"><table class="card bag-t"><thead><tr><th>Club</th>${[25, 50, 75, 100].map(x => `<th class="n">${x}%</th>`).join("")}</tr></thead>
+          <tbody>${Object.entries(sp).map(([c, v]) => `<tr><td><b>${esc(c)}</b></td>${[25, 50, 75, 100].map(x => `<td class="n">${esc(v[x] || "–")}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`; })()}
       ${patternBox()}
       ${(() => { const b = bestFocuses(of("session")); if (!b.total) return "";
         return `<div class="box"><h4>Best swing focuses <span style="font-weight:400;color:var(--ink-3);text-transform:none;letter-spacing:0">${b.total} balls rated</span></h4>
@@ -445,8 +448,9 @@ export function start(root, { onSignOut }) {
         <div><div class="t">${(Array.isArray(e.areas) ? e.areas : []).map(areaChip).join(" ") || "Practice"}${e.week ? ` <span class="pill neutral">${esc({ tournament: "Tournament week", swing: "Swing change", fun: "With friends" }[e.week] || e.week)}</span>` : ""}</div>
           ${Array.isArray(e.games) && e.games.length ? `<div class="body"><b>Practice games:</b> ${e.games.map(String).map(id => esc(GAMES.find(g => g.id === id)?.name || (id.startsWith("drill-") ? (of("drill").find(d => "drill-" + d.id === id)?.name || "Your drill") : id))).join(", ")}</div>` : ""}
           ${e.worked ? `<div class="body" style="white-space:pre-wrap"><b>Practiced:</b> ${esc(e.worked)}</div>` : ""}
+          ${e.skill && Array.isArray(e.skill.lines) ? `<div class="body"><b>Results:</b> ${e.skill.lines.map(esc).join(" · ")}</div>` : ""}
           ${e.focus && Array.isArray(e.focus.shots) ? `<div class="body"><b>Swing focus by kind:</b> ${focusSummary(e.focus.shots).byKind.map(k => `${esc(k.label)} ${k.c.toFixed(1)}/${k.r.toFixed(1)}`).join(" · ")} <span style="color:var(--ink-3)">(commitment/result)</span></div>` : ""}
-          ${e.went ? `<div class="body"><b>${e.focus ? "What worked best" : "How it went"}:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>${e.focus ? "Taking to the course" : "Next time"}:</b> ${esc(e.next)}</div>` : ""}</div>
+          ${e.went ? `<div class="body"><b>${e.focus ? "What worked best" : e.skill ? "What worked" : "How it went"}:</b> ${esc(e.went)}</div>` : ""}${e.next ? `<div class="body"><b>${e.focus || e.skill ? "Taking to the course" : "Next time"}:</b> ${esc(e.next)}</div>` : ""}</div>
         <div style="text-align:right">${e.minutes ? `<div class="hcp" style="font-size:18px">${esc(e.minutes)} min</div>` : ""}${e.rating ? `<span class="pill ${+e.rating >= 4 ? "good" : +e.rating === 3 ? "warn" : "bad"}">${RATINGS[+e.rating - 1]}</span>` : ""}</div></div>`; }).join("")}</div>`
         : `<div class="empty">No practice logged yet. ${first} logs sessions from the Practice tab or Home.</div>`}`;
   }

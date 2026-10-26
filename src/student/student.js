@@ -10,6 +10,7 @@ import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstat
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { DEALER_PLACES, SCHEDULES, RESULTS, dealShot, summarize, bandLines, clampLevel } from "../lib/shotdeck.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
+import { createSkills } from "./skills.js";
 import { FOCUS_KINDS, KIND_LABEL, PLACES as FOCUS_PLACES, PLACE_AREA, BALL_COUNTS, reactionFor, dealCard, summarize as focusSummary, bestFocuses } from "../lib/focus.js";
 import { TEST_SHOTS, GAME_SHOTS, DEPTHS, DEPTH_Y, MISSES, CONTACT_LABEL, sortClubs, shotsFor, clubsIn, stats as patStats, missLine, depthLine, poorLine, tips as patTips, plotSvg, tapToYards, legendHtml, courseClubs, courseSummary, courseSvg, gameOrder } from "../lib/pattern.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, dayNum, blockDate } from "../lib/util.js";
@@ -60,6 +61,7 @@ export function start(root, { students, onSignOut }) {
     S.game = { ...S.game, ai: null, aiBusy: false, pin: null, seed: 0 };
     { const d = draft.get(`${id}.dealer`); S.dealer = d && Array.isArray(d.history) && d.t0 > Date.now() - 864e5 ? d : null; }
     { const p = draft.get(`${id}.pattern`); S.pat = p && Array.isArray(p.shots) && Array.isArray(p.order) && p.t0 > Date.now() - 864e5 ? p : null; S.patSetup = null; S.patView = { club: "", src: "", cclub: "" }; }
+    skills.restore(id);
     { const f = draft.get(`${id}.focus`); S.focus = f && Array.isArray(f.shots) && f.t0 > Date.now() - 864e5 ? f : null; }
     { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
@@ -80,7 +82,8 @@ export function start(root, { students, onSignOut }) {
     const done = p.filter(x => x.done).reduce((a, x) => a + (+x.minutes || 0), 0);
     return { planned, done, pct: planned ? Math.round(done / planned * 100) : 0 };
   };
-  const byDateDesc = a => a.slice().sort((x, y) => String(y.date || y.created_at).localeCompare(String(x.date || x.created_at)));
+  // Newest first; same-day entries by the time they were saved.
+  const byDateDesc = a => a.slice().sort((x, y) => String(y.date || y.created_at).localeCompare(String(x.date || x.created_at)) || String(y.created_at || "").localeCompare(String(x.created_at || "")));
   const goal = () => of("goal")[0] || null;
   const bagEntry = () => of("bag")[0] || null;
   const myBag = () => bagEntry()?.clubs || [];
@@ -119,6 +122,9 @@ export function start(root, { students, onSignOut }) {
   const isSolo = () => ((S.profile && S.profile.id === S.sid && S.profile.kind) || S.students.find(s => s.id === S.sid)?.kind) === "solo";
   const sharing = () => !isSolo() || !!S.profile?.share_with_coach;
   const seen = txt => (sharing() ? txt : "");
+  const skills = createSkills({ S, render: (...a) => render(...a), top: (...a) => top(...a), esc, toast, run: (...a) => run(...a), api, draft, today, carried, myBag, bagEntry, levelOf, seen,
+    focusKey: () => autoFocus()?.key || "",
+    afterSave: () => { S.screen = "plan"; S.planWeek = null; render(); const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" }); } });
 
   // ---------- pieces
   function top(title, sub) {
@@ -213,6 +219,7 @@ export function start(root, { students, onSignOut }) {
       ${momentsCard()}
       <h2 class="pr-h">Start practicing</h2>
       <button class="games-cta focus-cta" data-go="focus"><b>Swing focus</b><span>One simple focus per ball, then rate how well you stayed with it. Find what works for you.</span></button>
+      <button class="games-cta skill-cta" data-go="skills"><b>Skill games</b><span>Six games for the golfer, not just the swing: speed, trust, decisions, energy and your reactions.</span></button>
       <button class="games-cta alt" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game.</span></button>
       <button class="games-cta alt" data-go="dealer"><b>Shot dealer</b><span>Random shots, one at a time. You can't plan the next one, so it trains you for the course.</span></button>
       <button class="games-cta alt" data-go="pattern"><b>Shot pattern</b><span>Tap where each ball finishes and rate the strike. See your real miss and fix the right thing.</span></button>
@@ -724,6 +731,9 @@ export function start(root, { students, onSignOut }) {
       </form>
       ${c.length ? `<section class="card"><h2>Your gapping</h2><div class="gaps">${c.map(x => `<div class="gap-row"><span>${esc(x.club)}</span><i style="width:${Math.max(8, x.carry / max * 100)}%"></i><b>${x.carry}</b></div>`).join("")}</div>
         ${notes.map(n => `<p class="gap-note">${esc(n)}</p>`).join("")}</section>` : ""}
+      ${e?.speeds && Object.keys(e.speeds).length ? `<section class="card"><h2>Speed chart <span>carry, yards</span></h2><div class="scroll"><table class="wedge-t"><thead><tr><th></th><th>25%</th><th>50%</th><th>75%</th><th>100%</th></tr></thead>
+        <tbody>${Object.entries(e.speeds).map(([club, v]) => `<tr><th>${esc(club)}</th>${[25, 50, 75, 100].map(sp => `<td>${esc(v[sp] || "–")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <p class="muted">From Speed dial. Hit it again any time to update a club.</p></section>` : ""}
     </main>`;
   }
   const bagHint = yds => {
@@ -909,7 +919,7 @@ export function start(root, { students, onSignOut }) {
   }
   function nav() {
     const items = [["home", "Home"], ["plan", "Practice"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]].filter(([k]) => !isSolo() || !["lessons", "notes"].includes(k));
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", focus: "plan", pattern: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", focus: "plan", pattern: "plan", skills: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -954,9 +964,10 @@ export function start(root, { students, onSignOut }) {
         <p>${esc(fmtDate(x.date))}${x.rating ? ` · felt ${esc(RATINGS[+x.rating - 1].toLowerCase())}` : ""}</p>
         ${(x.areas || []).length ? `<div class="sess-areas">${x.areas.map(areaChip).join("")}</div>` : ""}
         ${x.worked ? `<div><h3 class="sh3">What I practiced</h3><p>${esc(x.worked)}</p></div>` : ""}
+        ${x.skill && Array.isArray(x.skill.lines) ? `<div><h3 class="sh3">Results</h3>${x.skill.lines.map(l => `<p>${esc(l)}</p>`).join("")}</div>` : ""}
         ${x.focus && Array.isArray(x.focus.shots) ? `<div><h3 class="sh3">Swing focus by kind</h3>${focusSummary(x.focus.shots).byKind.map(k => `<div class="fz-kind"><span>${esc(k.label)}</span><span>${k.n} balls</span><span>commitment ${k.c.toFixed(1)}</span><span>result ${k.r.toFixed(1)}</span></div>`).join("")}</div>` : ""}
-        ${x.went ? `<div><h3 class="sh3">${x.focus ? "What worked best" : "How it went"}</h3><p>${esc(x.went)}</p></div>` : ""}
-        ${x.next ? `<div><h3 class="sh3">${x.focus ? "Take to the course" : "Next time"}</h3><p>${esc(x.next)}</p></div>` : ""}
+        ${x.went ? `<div><h3 class="sh3">${x.focus ? "What worked best" : x.skill ? "What worked" : "How it went"}</h3><p>${esc(x.went)}</p></div>` : ""}
+        ${x.next ? `<div><h3 class="sh3">${x.focus || x.skill ? "Take to the course" : "Next time"}</h3><p>${esc(x.next)}</p></div>` : ""}
         ${x.author === "student" ? `<button class="btn danger" data-act="del-sess">Delete</button>` : ""}<button class="btn" data-close="1">Close</button>`);
     }
     if (sh.kind === "drill") {
@@ -1001,7 +1012,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, pattern: patternScreen, focus: focusScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, pattern: patternScreen, focus: focusScreen, skills: () => skills.screen(), goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id],select[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -1074,6 +1085,7 @@ export function start(root, { students, onSignOut }) {
   // ---------- events
   root.onclick = async e => {
     const t = e.target;
+    const skb = t.closest("[data-sk]"); if (skb) { await skills.handle(skb, e); return; }
     const tg = t.closest("#patTarget"); if (tg && S.pat?.phase === "shoot") { S.pat.cur = tapToYards(tg, e.clientX, e.clientY); patSave(); render(); return; }
     const goBtn = t.closest("[data-go]"); if (goBtn) { go(goBtn.dataset.go); return; }
     const pcl = t.closest("[data-pclub]"); if (pcl) { S.patView.club = pcl.dataset.pclub; render(); return; }

@@ -391,3 +391,55 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .fz-react.reset{background:var(--surface-2)}.fz-react.reset b{color:var(--ink-2)}
 .fz-kind{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--line);color:var(--ink-2)}
 .fz-kind span:first-child{font-weight:700;color:var(--ink)}
+/* skill games */
+.skill-cta{background:var(--a5);color:#fff}
+.sk-game small{font-size:12px;opacity:.75;font-weight:600}
+.sk-speeds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sk-speeds div,.sk-rungs div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}
+.sk-speeds b,.sk-rungs b{font-family:var(--display);font-size:22px}
+.sk-speeds span{font-size:12px;color:var(--ink-2)}
+.sk-rungs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sk-rungs small{font-size:11px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.sk-big{align-items:center;text-align:center;gap:4px;padding:20px;border:2px solid var(--pine);background:var(--pine-soft)}
+.sk-big small{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sk-big b{font-family:var(--display);font-size:64px;line-height:1;color:var(--pine)}
+.sk-big b.sk-task{font-size:28px;line-height:1.15;color:var(--ink)}
+.sk-big span{font-size:14px;color:var(--ink-2)}
+.sk-dots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+.sk-dots i{width:18px;height:18px;border-radius:50%;border:2px solid var(--pine);background:var(--surface)}
+.sk-dots i.on{background:var(--pine)}
+.sk-ladder{display:flex;gap:8px}
+.sk-ladder div{flex:1;text-align:center;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column}
+.sk-ladder div b{font-family:var(--display);font-size:22px}
+.sk-ladder div small{font-size:11px;color:var(--ink-3)}
+.sk-ladder div.done{background:var(--good-soft);border-color:var(--good)}
+.sk-ladder div.now{border:2px solid var(--pine)}
+.sk-tasks{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.sk-tasks li.done{color:var(--good)}
+.sk-tasks li.skipped{color:var(--ink-3);text-decoration:line-through}
+.sk-tasks li.now{font-weight:700}
+.sk-tasks small{color:var(--ink-3);font-weight:400}
+.sk-energy{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;border:2px solid var(--line);margin-top:6px}
+.sk-energy b{font-size:15px}
+.sk-energy span{font-size:13px;color:var(--ink-2)}
+.sk-energy.sk-ebig{text-align:center;align-items:center;padding:20px}
+.sk-energy.sk-ebig b{font-family:var(--display);font-size:44px;line-height:1}
+.sk-energy.sk-ebig span{font-size:15px}
+.sk-energy.sk-ebig small{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.e-calm{border-color:var(--a1);background:color-mix(in srgb,var(--a1) 10%,var(--surface))}
+.e-steady{border-color:var(--a2);background:color-mix(in srgb,var(--a2) 10%,var(--surface))}
+.e-fired{border-color:var(--a3);background:color-mix(in srgb,var(--a3) 12%,var(--surface))}
+.sk-routines{display:flex;flex-direction:column;gap:6px}
+.sk-routine{display:flex;flex-direction:column;gap:2px;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2)}
+.sk-routine b{font-size:15px}
+.sk-routine span{font-size:13px;color:var(--ink-2)}
+.sk-routine[aria-pressed="true"]{border:2px solid var(--pine);background:var(--pine-soft)}
+.sk-go{padding:18px;font-size:18px}
+.sk-timer{align-items:center;text-align:center;gap:2px;border:2px solid var(--flag);background:var(--flag-soft)}
+.sk-timer b{font-family:var(--display);font-size:56px;line-height:1}
+.sk-timer.late{border-color:var(--good);background:var(--good-soft)}
+.sk-check{display:flex;gap:10px;align-items:center;font-size:14px;margin:8px 0}
+.sk-check input{width:20px;height:20px;accent-color:var(--pine)}
+.sk-table{width:100%;border-collapse:collapse;font-size:14px}
+.sk-table th,.sk-table td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+.sk-table th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
