@@ -443,3 +443,13 @@ fieldset.field legend{font-size:12px;font-weight:600;color:var(--ink-2);padding:
 .sk-table{width:100%;border-collapse:collapse;font-size:14px}
 .sk-table th,.sk-table td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
 .sk-table th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.small-next{align-self:flex-start;width:auto;padding:8px 14px;font-size:14px}
+.small-next small{font-weight:400;opacity:.7;margin-left:4px}
+.sk-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sk-routine small{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.sk-sit b.sk-task{font-family:var(--body);font-size:20px;font-weight:600;line-height:1.35}
+.sk-goal{font-size:17px!important;color:var(--ink)!important;font-weight:600;margin-top:4px}
+.sk-steps{display:flex;gap:6px}
+.sk-steps span{flex:1;text-align:center;font-size:12px;font-weight:700;padding:8px 4px;border-radius:999px;border:1px solid var(--line);color:var(--ink-3);background:var(--surface)}
+.sk-steps span.now{border-color:var(--pine);color:var(--pine);background:var(--pine-soft)}
+.sk-steps span.done{color:var(--good);border-color:var(--good)}
