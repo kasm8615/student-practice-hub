@@ -23,7 +23,7 @@ async function signedInRole(request, env) {
   });
   if (!res.ok) return null;
   const who = await res.json();
-  return who && (who.role === "coach" || who.role === "student") ? who.role : null;
+  return who && (who.role === "coach" || (who.role === "student" && who.coached !== false)) ? who.role : null;
 }
 
 function mux(env, path, init = {}) {
