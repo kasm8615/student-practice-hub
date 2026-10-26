@@ -264,14 +264,14 @@ export function start(root, { students, onSignOut }) {
           <fieldset class="field"><legend>Where are you?</legend>${pick("data-fplace", FOCUS_PLACES, F.place)}</fieldset>
           <fieldset class="field"><legend>How many balls?</legend>${pick("data-fballs", BALL_COUNTS.map(n => [n, n + " balls"]), F.balls)}</fieldset>
           <p class="muted">${F.place === "range" ? "New target and a new club every ball, like the course." : F.place === "short" ? "New spot and a new lie every ball." : "New hole and a new distance every putt."}</p>
-          <button class="btn primary" data-act="focus-start">Deal my first card</button></section></main>`;
+          <button class="btn primary" data-act="focus-start">Hit your first shot</button></section></main>`;
     }
     if (F.phase === "shoot") {
       const k = F.shots.length, [rt, rx] = F.c && F.r ? reactionFor(F.r, k + F.r) : ["", ""];
       return top("Swing focus", `Ball ${k + 1} of ${F.balls}`) + `<main class="s-content">
         <div class="fz-before"><b>Before</b> Pick your target${F.place === "range" ? " and club" : ""}, see the shot, commit.</div>
         <section class="card fz-card k-${esc(F.card.kind)}"><small>During · ${esc(KIND_LABEL[F.card.kind])}</small><p>${esc(F.card.card)}</p>
-          <button class="linkbtn" data-act="focus-new">Different card</button></section>
+          <button class="btn small-next" data-act="focus-new">Next shot <small>skip this focus</small></button></section>
         <section class="card"><h3 class="sh3">After · Commitment</h3><p class="fz-q">Did you stay with your focus to the finish?</p>${rate5("data-fc", F.c, "Lost it", "All the way")}
           <h3 class="sh3" style="margin-top:6px">Result</h3><p class="fz-q">How close was it to the shot you wanted?</p>${rate5("data-fr", F.r, "Not close", "Exactly it")}
           ${rt ? `<div class="fz-react ${F.r >= 4 ? "good" : F.r <= 2 ? "reset" : ""}"><b>${esc(rt)}</b><span>${esc(rx)}</span></div>
@@ -406,7 +406,7 @@ export function start(root, { students, onSignOut }) {
           <fieldset class="field"><legend>How hard?</legend>${pick("data-dshift", [[-1, "Easier"], [0, "For my level"], [1, "Harder"]], D.shift)}</fieldset>
           <div class="deal-sched"><b>${esc(sch.name)}</b><span>${esc(sch.line)}</span></div>
           ${hasBag ? `<p class="muted">Using the distances in your bag.</p>` : ""}
-          <button class="btn primary" data-act="dealer-start">Deal my first shot</button></section>
+          <button class="btn primary" data-act="dealer-start">Hit your first shot</button></section>
         <p class="muted" style="text-align:center">Most of your practice should be this kind. Short blocks of the same shot are for learning something brand new.</p></main>`;
     }
     const sum = summarize(D.history);
@@ -430,7 +430,7 @@ export function start(root, { students, onSignOut }) {
         <p class="muted">Do your full routine: pick a small target, one practice swing, one breath, go.</p></section>
       <div class="deal-res">${R.map(([l, sub], i) => `<button class="deal-r r${i}" data-act="dealer-res" data-r="${i}"><b>${esc(l)}</b><small>${esc(sub)}</small></button>`).join("")}</div>
       ${S.aiAvailable && !s.ai ? `<button class="btn" data-act="dealer-ai" ${D.aiBusy ? "disabled" : ""}>${D.aiBusy ? "Thinking…" : "✨ Make it a real scenario"}</button>` : ""}
-      <div class="row2"><button class="btn" data-act="dealer-skip">Can't do this one</button><button class="btn" data-act="dealer-undo" ${D.history.length ? "" : "disabled"}>Undo last</button></div>
+      <div class="row2"><button class="btn" data-act="dealer-skip">Next shot <small>skip this one</small></button><button class="btn" data-act="dealer-undo" ${D.history.length ? "" : "disabled"}>Undo last</button></div>
       <button class="btn" data-act="dealer-finish">Finish${name ? ", " + esc(name) : ""}</button>
       <p class="muted" style="text-align:center">Tap how it went to get your next shot. No peeking ahead.</p></main>`;
   }
