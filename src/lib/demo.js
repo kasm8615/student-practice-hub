@@ -69,6 +69,10 @@ db.scores.push({ id: uid(), student_id: S1, drill_id: ladder.id, score: 5, out_o
 [["Tue", "Full swing", "Half swings, 7 iron", 40, false], ["Thu", "Short game", "Chipping ladder", 30, false]]
   .forEach(([day, area, title, minutes, done]) => add(S3, "plan", { day, area, title, minutes, done }));
 
+// Swing focus sample: feel and see cards work best for Alex, rhythm cards rush him.
+add(S1, "session", { date: dayOffset(-4), minutes: 35, areas: ["Full swing"], rating: "", worked: "Swing focus, 12 balls (commitment 3.7, result 3.3)", went: "Feeling my feet kept me balanced. Counting rushed me.", next: "Feet on every approach shot",
+  focus: { place: "range", shots: [["feel", "Feel your feet press into the ground through the whole swing", 5, 4], ["see", "Picture where the ball lands before you take the club back", 4, 4], ["rhythm", "Count \"one\" going back, \"two\" coming through", 2, 2], ["feel", "Feel your feet press into the ground through the whole swing", 5, 5], ["mood", "Calm and patient, like you have all day", 4, 3], ["see", "Picture where the ball lands before you take the club back", 4, 4], ["rhythm", "Count \"one\" going back, \"two\" coming through", 3, 2], ["hear", "Listen for a crisp, clean strike", 4, 3], ["feel", "Keep the same grip pressure from start to finish", 3, 3], ["mood", "Calm and patient, like you have all day", 4, 4], ["hear", "Listen for a crisp, clean strike", 3, 3], ["feel", "Keep the same grip pressure from start to finish", 4, 3]]
+    .map(([kind, card, c, r]) => ({ kind, card, c, r })) } }, "student");
 add(S5, "stat", { date: dayOffset(-5), event: "Casual", course: "Charlotte Golf Links", holes: "18", score: 96, putts: 36, gir: 3, fairways: "6/14" }, "student");
 add(S5, "session", { date: dayOffset(-2), minutes: 45, areas: ["Full swing"], rating: 3, worked: "Shot dealer, range", went: "Better with short irons" }, "student");
 add(S4, "stat", { date: dayOffset(-2), event: "Casual", course: "Renaissance Park", holes: "18", score: 101, putts: 38, gir: 2, fairways: "5/14" }, "student");

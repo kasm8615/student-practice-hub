@@ -10,6 +10,7 @@ import { CLUBS, newHole, totals, patterns, patternLines } from "../lib/roundstat
 import { PLACES, GAMES, WEEKS, WEEK_TIPS, levelOf, buildSession, focusFor, drillGames } from "../lib/scenarios.js";
 import { DEALER_PLACES, SCHEDULES, RESULTS, dealShot, summarize, bandLines, clampLevel } from "../lib/shotdeck.js";
 import { GOAL_PERIODS, GOAL_FIELDS, GOAL_GUIDE } from "../lib/goals.js";
+import { FOCUS_KINDS, KIND_LABEL, PLACES as FOCUS_PLACES, PLACE_AREA, BALL_COUNTS, reactionFor, dealCard, summarize as focusSummary, bestFocuses } from "../lib/focus.js";
 import { TEST_SHOTS, GAME_SHOTS, DEPTHS, DEPTH_Y, MISSES, CONTACT_LABEL, sortClubs, shotsFor, clubsIn, stats as patStats, missLine, depthLine, poorLine, tips as patTips, plotSvg, tapToYards, legendHtml, courseClubs, courseSummary, courseSvg, gameOrder } from "../lib/pattern.js";
 import { logo, DAYS, AREA_NAMES, esc, initials, today, todayIndex, dateParts, fmtDate, shortDate, safeUrl, areaChip, focusBar, toast, friendly, draft, addDays, weekStartOf, weekDates, weekLabel, dayName, dayNum, blockDate } from "../lib/util.js";
 
@@ -59,6 +60,7 @@ export function start(root, { students, onSignOut }) {
     S.game = { ...S.game, ai: null, aiBusy: false, pin: null, seed: 0 };
     { const d = draft.get(`${id}.dealer`); S.dealer = d && Array.isArray(d.history) && d.t0 > Date.now() - 864e5 ? d : null; }
     { const p = draft.get(`${id}.pattern`); S.pat = p && Array.isArray(p.shots) && Array.isArray(p.order) && p.t0 > Date.now() - 864e5 ? p : null; S.patSetup = null; S.patView = { club: "", src: "", cclub: "" }; }
+    { const f = draft.get(`${id}.focus`); S.focus = f && Array.isArray(f.shots) && f.t0 > Date.now() - 864e5 ? f : null; }
     { const w = draft.get(`${id}.week`); S.game.week = w && w.until >= today() ? w.week : "normal"; S.game.tdate = w && w.until >= today() ? w.tdate || "" : ""; }
     try { localStorage.setItem("sph.student", id); } catch {}
     if (stopWatch) stopWatch();
@@ -180,9 +182,9 @@ export function start(root, { students, onSignOut }) {
           return lines.length ? `<button class="goal-peek" data-go="goals">${lines.map(([k, v]) => `<span><b>${k}:</b> ${esc(v)}</span>`).join("")}<small>Your 3-month goals ›</small></button>`
             : `<button class="btn" data-go="goals">Set your goals</button>`; })()}
       </section>
-      <button class="btn primary" data-go="games">Get a practice game</button>
+      <button class="btn primary" data-go="plan">Start practicing</button>
       <button class="btn" data-act="practice">Log today's practice</button>
-      <div class="row2"><button class="btn" data-act="log">Log a round</button>${isSolo() ? `<button class="btn" data-go="pattern">Shot pattern test</button>` : `<button class="btn" data-go="notes">Send Karina a swing</button>`}</div>
+      <div class="row2"><button class="btn" data-act="log">Log a round</button>${isSolo() ? `<button class="btn" data-go="rounds">My rounds</button>` : `<button class="btn" data-go="notes">Send Karina a swing</button>`}</div>
       ${isSolo() ? coachCard() : ""}
     </main>`;
   }
@@ -203,11 +205,96 @@ export function start(root, { students, onSignOut }) {
       <section class="card"><h2>What you're working on</h2>${focusBar(p, x => x.minutes, x => x.area)}</section>
       ${weekDates(ws).map(dt => { const b = p.filter(x => blockDate(x) === dt); if (!b.length) return ""; return `<section class="card ${dt === td ? "is-today" : ""}"><h2>${dayName(dt)}, ${esc(shortDate(dt))}${dt === td ? " · today" : ""} <span>${b.reduce((a, x) => a + (+x.minutes || 0), 0)} min</span></h2>${b.map(task).join("")}</section>`; }).join("")}
       <p class="muted" style="text-align:center">Karina sets your plan. Days not shown are rest days.</p>`);
-    return top("Practice plan", S.profile?.name || "") + `<main class="s-content">
-      <button class="games-cta" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game. Tap to get a session.</span></button>
+    const soloWeek = () => { const wk = weekDates(weekStartOf()), ss = sessions().filter(x => wk.includes(String(x.date)));
+      return `<section class="card"><h2>This week <span>${esc(weekLabel(weekStartOf()))}</span></h2>
+        <p class="pr-week"><b>${ss.reduce((a, x) => a + (+x.minutes || 0), 0)}</b> min logged · <b>${new Set(ss.map(x => String(x.date))).size}</b> day${new Set(ss.map(x => String(x.date))).size === 1 ? "" : "s"} practiced</p></section>`; };
+    const best = bestFocuses(sessions());
+    return top("Practice", S.profile?.name || "") + `<main class="s-content">
+      ${momentsCard()}
+      <h2 class="pr-h">Start practicing</h2>
+      <button class="games-cta focus-cta" data-go="focus"><b>Swing focus</b><span>One simple focus per ball, then rate how well you stayed with it. Find what works for you.</span></button>
+      <button class="games-cta alt" data-go="games"><b>Practice games</b><span>Range, short game, putting and on-course games picked for your game.</span></button>
       <button class="games-cta alt" data-go="dealer"><b>Shot dealer</b><span>Random shots, one at a time. You can't plan the next one, so it trains you for the course.</span></button>
       <button class="games-cta alt" data-go="pattern"><b>Shot pattern</b><span>Tap where each ball finishes and rate the strike. See your real miss and fix the right thing.</span></button>
-      ${planPart}${practiceLog()}</main>`;
+      ${isSolo() ? soloWeek() : `<h2 class="pr-h">This week</h2>${planPart}`}
+      ${best.cards.length ? `<section class="card best-focus"><h2>My best swing focuses <span>${best.total} balls</span></h2>
+        ${best.cards.map((c, i) => `<div class="bf-row"><span class="bf-n">${i + 1}</span><div><small>${esc(KIND_LABEL[c.kind])}</small><b>${esc(c.card)}</b><span>Commitment ${c.c.toFixed(1)} · result ${c.r.toFixed(1)} · ${c.n} balls</span></div></div>`).join("")}
+        <p class="muted">Take one of these to the course. Use it on every shot for nine holes and see how it holds up.</p></section>` : ""}
+      ${practiceLog()}</main>`;
+  }
+  // The idea behind every practice: open the first time, then one line that can be reopened.
+  function momentsCard() {
+    const open = S.momentsOpen ?? !draft.get(`${S.sid}.moments`);
+    return `<details class="card moments" ${open ? "open" : ""}>
+      <summary data-act="moments-toggle"><span>How we practice</span><b>Every shot has three moments</b></summary>
+      <ol class="moments-list">
+        <li><b>Before: decide.</b> Pick the shot and commit to it. A decision you trust beats a perfect one you doubt.</li>
+        <li><b>During: sense, don't think.</b> Give yourself one simple focus for the swing, like seeing the ball flight, hearing the strike or feeling your balance. No swing thoughts.</li>
+        <li><b>After: react and reset.</b> Enjoy a good shot for a few seconds so it sticks. After a poor one, say one factual thing and let it go.</li>
+      </ol>
+      <p class="moments-rate">Rate how well you did what you intended, from 1 to 5, not just where the ball went. Commitment comes first. Results follow.</p>
+      <button class="btn" data-act="moments-ok">Got it</button>
+    </details>`;
+  }
+
+  // ---------- swing focus practice
+  const newFocus = () => ({ phase: "setup", place: "range", balls: 12, shots: [], card: null, c: 0, r: 0, t0: 0, t1: 0 });
+  const focusSave = () => { if (S.focus && S.focus.phase !== "setup") draft.set(`${S.sid}.focus`, S.focus); else draft.clear(`${S.sid}.focus`); };
+  const rate5 = (attr, cur, lo, hi) => `<div class="pat-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="pick-btn" ${attr}="${n}" aria-pressed="${cur === n}">${n}</button>`).join("")}</div><div class="pat-ends"><span>${lo}</span><span>${hi}</span></div>`;
+  function focusScreen() {
+    const F = S.focus || (S.focus = newFocus());
+    const pick = (attr, list, cur) => `<div class="pick">${list.map(([v, l]) => `<button type="button" class="pick-btn" ${attr}="${esc(v)}" aria-pressed="${String(cur) === String(v)}">${esc(l)}</button>`).join("")}</div>`;
+    if (F.phase === "setup") {
+      return top("Swing focus", S.profile?.name || "") + `<main class="s-content">
+        <section class="card"><h2>How it works</h2>
+          <ol class="moments-list">
+            <li><b>Before:</b> pick a target and club, see the shot, commit.</li>
+            <li><b>During:</b> the app gives you one focus card. Stay with it to the finish.</li>
+            <li><b>After:</b> rate your commitment and the result, 1 to 5, then react or reset.</li>
+          </ol>
+          <p class="muted">After a few sessions you'll see which focuses work best for you.</p></section>
+        <section class="card">
+          <fieldset class="field"><legend>Where are you?</legend>${pick("data-fplace", FOCUS_PLACES, F.place)}</fieldset>
+          <fieldset class="field"><legend>How many balls?</legend>${pick("data-fballs", BALL_COUNTS.map(n => [n, n + " balls"]), F.balls)}</fieldset>
+          <p class="muted">${F.place === "range" ? "New target and a new club every ball, like the course." : F.place === "short" ? "New spot and a new lie every ball." : "New hole and a new distance every putt."}</p>
+          <button class="btn primary" data-act="focus-start">Deal my first card</button></section></main>`;
+    }
+    if (F.phase === "shoot") {
+      const k = F.shots.length, [rt, rx] = F.c && F.r ? reactionFor(F.r, k + F.r) : ["", ""];
+      return top("Swing focus", `Ball ${k + 1} of ${F.balls}`) + `<main class="s-content">
+        <div class="fz-before"><b>Before</b> Pick your target${F.place === "range" ? " and club" : ""}, see the shot, commit.</div>
+        <section class="card fz-card k-${esc(F.card.kind)}"><small>During · ${esc(KIND_LABEL[F.card.kind])}</small><p>${esc(F.card.card)}</p>
+          <button class="linkbtn" data-act="focus-new">Different card</button></section>
+        <section class="card"><h3 class="sh3">After · Commitment</h3><p class="fz-q">Did you stay with your focus to the finish?</p>${rate5("data-fc", F.c, "Lost it", "All the way")}
+          <h3 class="sh3" style="margin-top:6px">Result</h3><p class="fz-q">How close was it to the shot you wanted?</p>${rate5("data-fr", F.r, "Not close", "Exactly it")}
+          ${rt ? `<div class="fz-react ${F.r >= 4 ? "good" : F.r <= 2 ? "reset" : ""}"><b>${esc(rt)}</b><span>${esc(rx)}</span></div>
+          <button class="btn primary" data-act="focus-next">${k + 1 >= F.balls ? "Finish" : "Next ball"}</button>` : ""}</section>
+        <div class="row2"><button class="btn" data-act="focus-undo" ${k || F.c || F.r ? "" : "disabled"}>Undo</button><button class="btn" data-act="focus-finish">Finish early</button></div></main>`;
+    }
+    const sm = focusSummary(F.shots);
+    return top("Swing focus", "Session done") + `<main class="s-content">
+      <section class="card"><h2>Your session <span>${sm.n} balls</span></h2>
+        <div class="pat-stats"><div><small>Commitment</small><b>${sm.c != null ? sm.c.toFixed(1) + " of 5" : "–"}</b></div><div><small>Result</small><b>${sm.r != null ? sm.r.toFixed(1) + " of 5" : "–"}</b></div>
+          <div><small>Fully committed (4–5)</small><b>${sm.committed} of ${sm.n}</b></div><div><small>Best kind today</small><b>${esc(sm.byKind.filter(x => x.n >= 2).sort((a, b) => (b.c + b.r) - (a.c + a.r))[0]?.label || "Too early to say")}</b></div></div>
+        ${sm.byKind.map(x => `<div class="fz-kind"><span>${esc(x.label)}</span><span>${x.n} ball${x.n > 1 ? "s" : ""}</span><span>commitment ${x.c.toFixed(1)}</span><span>result ${x.r.toFixed(1)}</span></div>`).join("")}
+        <p class="muted">Look at commitment first. Shots you fully committed to usually come out better, even when the result isn't perfect.</p></section>
+      <section class="card"><div class="field"><label for="fz-worked">What worked best today?</label><textarea id="fz-worked" placeholder="Feeling my feet kept me balanced. The rhythm cards rushed me."></textarea></div>
+        <div class="field"><label for="fz-useful">What will you take to the course?</label><textarea id="fz-useful" placeholder="Picture where it lands on every approach shot."></textarea></div></section>
+      <button class="btn primary" data-act="focus-save">Save to my practice log</button>
+      <div class="row2"><button class="btn" data-act="focus-more">Hit 3 more</button><button class="btn" data-act="focus-discard">Discard</button></div></main>`;
+  }
+  async function focusSaveSession() {
+    const F = S.focus, sm = focusSummary(F.shots);
+    if (!sm.n) { toast("Rate at least one ball first."); return; }
+    const mins = Math.max(5, Math.min(120, Math.round(((F.t1 || Date.now()) - F.t0) / 60000)));
+    const d = { date: today(), minutes: mins, areas: [PLACE_AREA[F.place]], rating: "",
+      worked: `Swing focus, ${sm.n} balls (commitment ${sm.c.toFixed(1)}, result ${sm.r.toFixed(1)})`,
+      went: (root.querySelector("#fz-worked")?.value || "").trim(), next: (root.querySelector("#fz-useful")?.value || "").trim(),
+      focus: { place: F.place, shots: F.shots.map(({ kind, card, c, r }) => ({ kind, card, c, r })) } };
+    const ok = await run(() => api.addEntry(S.sid, "session", d), "Saved to your practice log." + seen(" Karina will see it."));
+    if (!ok) return;
+    S.focus = null; focusSave(); S.screen = "plan"; S.planWeek = null; render();
+    const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
   }
   function practiceLog() {
     const all = sessions(), ws = weekStart();
@@ -566,7 +653,7 @@ export function start(root, { students, onSignOut }) {
       ${S.live ? `<section class="card live-resume"><h2>Round in progress</h2><p style="margin:0"><b>${esc(S.live.course || "Your round")}</b> · ${S.live.mode === "full" ? "Full" : "Quick"} · ${liveThru()}</p>
         <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
       ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
-      <button class="bag-link" data-go="pattern"><span><b>My shot pattern</b><small>${of("pattern").length ? `${of("pattern").length} range session${of("pattern").length > 1 ? "s" : ""} · where your shots finish` : "Test where your shots finish at the range"}</small></span><span class="chev">›</span></button>
+      
       <button class="bag-link" data-go="bag"><span><b>My club distances</b><small>${carried(myBag()).length ? `${carried(myBag()).length} clubs · updated ${esc(shortDate(bagEntry().updated_at))}` : "Add how far you hit each club"}</small></span><span class="chev">›</span></button>
       ${r.length >= 1 ? `<section class="card"><h2>Your trend</h2>${trendHtml(r, S.trend)}</section>` : ""}
       <section class="card"><h2>Recent rounds</h2>${r.map(x => { const d = dateParts(x.date); return `<button class="round" data-round="${esc(x.id)}"><span class="date"><b>${d.d}</b><small>${esc(d.mon || "")}</small></span>
@@ -821,8 +908,8 @@ export function start(root, { students, onSignOut }) {
     </main>`;
   }
   function nav() {
-    const items = [["home", "Home"], ["plan", "Plan"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]].filter(([k]) => !isSolo() || !["lessons", "notes"].includes(k));
-    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", live: "rounds", bag: "rounds", pattern: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
+    const items = [["home", "Home"], ["plan", "Practice"], ["goals", "Goals"], ["rounds", "Rounds"], ["lessons", "Lessons"], ["notes", "Notes"]].filter(([k]) => !isSolo() || !["lessons", "notes"].includes(k));
+    return `<nav class="nav" aria-label="Sections"><div>${items.map(([k, l]) => `<button data-go="${k}" ${({ games: "plan", dealer: "plan", focus: "plan", pattern: "plan", live: "rounds", bag: "rounds" }[S.screen] || S.screen) === k ? 'aria-current="page"' : ""}>${ICON[k]}${l}</button>`).join("")}</div></nav>`;
   }
 
   // ---------- sheets
@@ -867,8 +954,9 @@ export function start(root, { students, onSignOut }) {
         <p>${esc(fmtDate(x.date))}${x.rating ? ` · felt ${esc(RATINGS[+x.rating - 1].toLowerCase())}` : ""}</p>
         ${(x.areas || []).length ? `<div class="sess-areas">${x.areas.map(areaChip).join("")}</div>` : ""}
         ${x.worked ? `<div><h3 class="sh3">What I practiced</h3><p>${esc(x.worked)}</p></div>` : ""}
-        ${x.went ? `<div><h3 class="sh3">How it went</h3><p>${esc(x.went)}</p></div>` : ""}
-        ${x.next ? `<div><h3 class="sh3">Next time</h3><p>${esc(x.next)}</p></div>` : ""}
+        ${x.focus && Array.isArray(x.focus.shots) ? `<div><h3 class="sh3">Swing focus by kind</h3>${focusSummary(x.focus.shots).byKind.map(k => `<div class="fz-kind"><span>${esc(k.label)}</span><span>${k.n} balls</span><span>commitment ${k.c.toFixed(1)}</span><span>result ${k.r.toFixed(1)}</span></div>`).join("")}</div>` : ""}
+        ${x.went ? `<div><h3 class="sh3">${x.focus ? "What worked best" : "How it went"}</h3><p>${esc(x.went)}</p></div>` : ""}
+        ${x.next ? `<div><h3 class="sh3">${x.focus ? "Take to the course" : "Next time"}</h3><p>${esc(x.next)}</p></div>` : ""}
         ${x.author === "student" ? `<button class="btn danger" data-act="del-sess">Delete</button>` : ""}<button class="btn" data-close="1">Close</button>`);
     }
     if (sh.kind === "drill") {
@@ -913,7 +1001,7 @@ export function start(root, { students, onSignOut }) {
       root.innerHTML = `<div class="center-msg"><div><p>Loading your practice…</p></div></div>`;
       return;
     }
-    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, pattern: patternScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
+    const scr = { home, plan: planScreen, games: gamesScreen, dealer: dealerScreen, live: liveScreen, bag: bagScreen, pattern: patternScreen, focus: focusScreen, goals: goalsScreen, rounds: roundsScreen, lessons: lessonsScreen, notes: notesScreen }[S.screen]();
     const y = window.scrollY;
     const keep = {};
     root.querySelectorAll("textarea[id],input[id],select[id]").forEach(el => { if (el.type !== "file" && el.type !== "checkbox") keep[el.id] = el.value; });
@@ -994,6 +1082,10 @@ export function start(root, { students, onSignOut }) {
     const ppc = t.closest("[data-pc]"); if (ppc && S.pat) { S.pat.c = +ppc.dataset.pc; if (S.pat.c > 2) S.pat.miss = ""; patSave(); render(); return; }
     const pms = t.closest("[data-pmiss]"); if (pms && S.pat) { S.pat.miss = S.pat.miss === pms.dataset.pmiss ? "" : pms.dataset.pmiss; patSave(); render(); return; }
     const pdp = t.closest("[data-pdepth]"); if (pdp && S.pat) { S.pat.depth = pdp.dataset.pdepth; patSave(); render(); return; }
+    const fpl = t.closest("[data-fplace]"); if (fpl && S.focus) { S.focus.place = fpl.dataset.fplace; render(); return; }
+    const fbl = t.closest("[data-fballs]"); if (fbl && S.focus) { S.focus.balls = +fbl.dataset.fballs; render(); return; }
+    const fcm = t.closest("[data-fc]"); if (fcm && S.focus) { S.focus.c = +fcm.dataset.fc; focusSave(); render(); return; }
+    const frs = t.closest("[data-fr]"); if (frs && S.focus) { S.focus.r = +frs.dataset.fr; focusSave(); render(); return; }
     if (t.closest("[data-close]")) { S.sheet = null; render(); return; }
     const op = t.closest("[data-open]"); if (op) { S.sheet = { kind: "detail", id: op.dataset.open }; render(); return; }
     const rd = t.closest("[data-round]"); if (rd) { S.sheet = { kind: "round", id: rd.dataset.round }; render(); return; }
@@ -1053,6 +1145,25 @@ export function start(root, { students, onSignOut }) {
       const el = document.getElementById("practice-log"); if (el) el.scrollIntoView({ block: "start" });
       return;
     }
+    if (act === "moments-toggle") { e.preventDefault(); S.momentsOpen = !(S.momentsOpen ?? !draft.get(`${S.sid}.moments`)); render(); return; }
+    if (act === "moments-ok") { draft.set(`${S.sid}.moments`, true); S.momentsOpen = false; render(); return; }
+    if (act === "focus-start") { const F = S.focus; Object.assign(F, { phase: "shoot", shots: [], c: 0, r: 0, t0: Date.now(), t1: 0, card: dealCard(F.place, []) }); focusSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "focus-new") { const F = S.focus; F.card = dealCard(F.place, F.shots.concat([{ ...F.card }])); focusSave(); render(); return; }
+    if (act === "focus-next") {
+      const F = S.focus;
+      if (!F.c || !F.r) { toast("Rate commitment and result first."); return; }
+      F.shots.push({ kind: F.card.kind, card: F.card.card, c: F.c, r: F.r }); F.c = 0; F.r = 0;
+      if (F.shots.length >= F.balls) { F.phase = "done"; F.t1 = Date.now(); } else F.card = dealCard(F.place, F.shots);
+      focusSave(); render(); window.scrollTo({ top: 0, behavior: F.phase === "done" ? "auto" : "smooth" }); return;
+    }
+    if (act === "focus-undo") { const F = S.focus; if (F.c || F.r) { F.c = 0; F.r = 0; } else { const last = F.shots.pop(); if (last) F.card = { kind: last.kind, card: last.card }; } focusSave(); render(); return; }
+    if (act === "focus-finish") { const F = S.focus; if (!F.shots.length) { S.focus = null; focusSave(); go("plan"); return; } F.phase = "done"; F.t1 = Date.now(); focusSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "focus-more") { const F = S.focus; F.balls = F.shots.length + 3; F.phase = "shoot"; F.card = dealCard(F.place, F.shots); focusSave(); render(); window.scrollTo(0, 0); return; }
+    if (act === "focus-discard") {
+      if (!a.classList.contains("armed")) { a.classList.add("armed"); a.textContent = "Tap again to discard"; setTimeout(() => { a.classList.remove("armed"); a.textContent = "Discard"; }, 3500); return; }
+      S.focus = null; focusSave(); go("plan"); return;
+    }
+    if (act === "focus-save") { focusSaveSession(); return; }
     if (act === "welcome-done") { draft.set(`${S.sid}.welcomed`, true); render(); return; }
     if (act === "coach-ask") { S.sheet = { kind: "coach-ask" }; render(); setTimeout(() => root.querySelector("#ca-note")?.focus(), 50); return; }
     if (act === "coach-send") {
