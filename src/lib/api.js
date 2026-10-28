@@ -27,6 +27,8 @@ export const api = {
   async deletePracticeAccount(sid) { must(await supabase.rpc("delete_practice_account", { sid })); },
   async practiceSummary() { const { data, error } = await supabase.rpc("practice_summary"); return error ? null : data; },
   async lastSeen() { return must(await supabase.rpc("last_seen_by_student")); },
+  // Latest thing each student posted (needs supabase/update-8.sql; empty until it's run).
+  async lastActivity() { const { data, error } = await supabase.rpc("last_activity_by_student"); return error ? [] : data || []; },
 
   // ---- entries
   async entries(studentId) {

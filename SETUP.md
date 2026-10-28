@@ -157,3 +157,7 @@ What Karina sees:
 - Golfers who share appear in the roster with a **Practice app** label (filter: Practice app).
 - **Coaching requests** (with their note and email) show on the check-in, and Karina gets an email. **Make my student** turns them into a coached student with the full app; **Dismiss** clears the request.
 - No emails about practice-version users' rounds or practice.
+
+## Update 8: student list sorted by latest upload
+
+Supabase SQL Editor → run `supabase/update-8.sql` (no values to replace). Karina's student list then shows the student who posted most recently at the top, with what they posted and when ("Swing video · 2 hours ago"). Karina's own posts don't count. A "Latest upload / A–Z" switch above the list changes the order; the app remembers the choice. Before the SQL is run, the list stays A–Z.

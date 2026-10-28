@@ -111,6 +111,11 @@ export const demoApi = {
   async addStudent(d) { const s = { id: uid(), archived: false, ...d }; db.students.push(s); return s; },
   async updateStudent(id, d) { const s = db.students.find(x => x.id === id); Object.assign(s, d); return s; },
   async deleteStudent(id) { db.students = db.students.filter(s => s.id !== id); db.entries = db.entries.filter(e => e.student_id !== id); },
+  async lastActivity() {
+    const best = {};
+    db.entries.filter(e => e.author === "student").forEach(e => { const k = e.type === "note" && e.data.video_pid ? "video" : e.type; const at = e.data.date && e.type !== "bag" ? e.data.date + "T12:00:00Z" : e.created_at; if (!best[e.student_id] || at > best[e.student_id].last_post) best[e.student_id] = { student_id: e.student_id, last_post: at, last_type: k }; });
+    return Object.values(best);
+  },
   async lastSeen() { return Object.entries(db.seen).map(([student_id, last_seen]) => ({ student_id, last_seen })); },
   async entries(sid) { return db.entries.filter(e => e.student_id === sid).map(flat); },
   async entriesOfType(t) { return db.entries.filter(e => e.type === t).map(flat); },

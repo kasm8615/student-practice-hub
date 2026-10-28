@@ -82,6 +82,7 @@ const TYPES = {
     { k: "file", t: "file", l: "Picture or PDF", full: true }
   ] }
 };
+const ACT_LABEL = { stat: "Round", session: "Practice", note: "Note", video: "Swing video", goal: "Goals", bag: "Club distances", pattern: "Shot pattern", score: "Drill score" };
 const TAB_ORDER = ["overview", "goal", "lesson", "drill", "stat", "plan", "session", "fitness", "note"];
 const TAB_LABEL = { overview: "Overview", goal: "Goals", session: "Practice log", note: "Notes" };
 const RATINGS = ["Rough", "Meh", "OK", "Good", "Great"];
@@ -90,16 +91,17 @@ const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - (d.getDa
 export function start(root, { onSignOut }) {
   const S = {
     trend: { type: "all", n: 10, holes: "18", metric: "score" },
-    students: [], sel: null, view: "checkin", tab: "overview", filter: "All", q: "", showArchived: false,
+    students: [], sel: null, view: "checkin", tab: "overview", filter: "All", q: "", sort: (() => { try { return localStorage.getItem("sph.coachSort") || "recent"; } catch { return "recent"; } })(), activity: {}, showArchived: false,
     entries: [], scores: [], seen: {}, week: { plans: [], notes: [], scores: [], drills: [], sessions: [] }, invite: null
   };
   let stopWatch = null, reloadTimer = null;
 
   // ---------- data
   async function loadStudents() {
-    const [students, seen] = await Promise.all([api.listStudents(), api.lastSeen().catch(() => [])]);
+    const [students, seen, act] = await Promise.all([api.listStudents(), api.lastSeen().catch(() => []), api.lastActivity().catch(() => [])]);
     S.students = students;
     S.seen = Object.fromEntries(seen.map(r => [r.student_id, r.last_seen]));
+    S.activity = Object.fromEntries(act.map(r => [r.student_id, { at: r.last_post, type: r.last_type }]));
   }
   function isSolo(s) { return (s && s.kind) === "solo"; }
   async function loadStudent() {
@@ -132,16 +134,19 @@ export function start(root, { onSignOut }) {
       .filter(s => S.showArchived || !s.archived)
       .filter(s => S.filter === "All" || (S.filter === "Practice app" ? isSolo(s) : !isSolo(s) && s.grp === S.filter))
       .filter(s => !q || String(s.name).toLowerCase().includes(q));
+    // Most recent upload first (students who haven't posted go last, A–Z), or A–Z.
+    if (S.sort === "recent") rows.sort((a, b) => String(S.activity[b.id]?.at || "").localeCompare(String(S.activity[a.id]?.at || "")) || String(a.name).localeCompare(String(b.name)));
     const unread = unreadCount();
     return `<aside class="roster" aria-label="Students">
       <div class="brand" style="flex-direction:row;align-items:center;gap:12px">${logo("c-logo")}<div style="display:flex;flex-direction:column;gap:2px"><h1>Golfers Practice Hub</h1></div></div>
       <button class="nav-btn" data-view="checkin" aria-current="${S.view === "checkin"}">This week's check-in ${unread ? `<span class="badge" title="New notes from students">${unread}</span>` : ""}</button>
       <input id="search" class="search" type="search" placeholder="Search students" aria-label="Search students" value="${esc(S.q)}">
       <div class="filters" role="group" aria-label="Filter">${["All", "Junior", "Adult", ...(S.students.some(isSolo) ? ["Practice app"] : [])].map(f => `<button class="chip" data-filter="${f}" aria-pressed="${S.filter === f}">${f === "All" || f === "Practice app" ? f : f + "s"}</button>`).join("")}</div>
+      <div class="filters sort-row" role="group" aria-label="Sort"><span>Sort:</span>${[["recent", "Latest upload"], ["az", "A–Z"]].map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
       <ul class="student-list">${!S.students.length ? `<li class="empty-roster">No students yet. Add your first one below.</li>` : !rows.length ? `<li class="empty-roster">No students match.</li>` :
         rows.map(s => `<li><button class="student-btn" data-sid="${esc(s.id)}" aria-current="${S.view === "student" && s.id === S.sel}">
           <span class="avatar ${s.grp === "Junior" ? "junior" : ""}">${esc(initials(s.name))}</span>
-          <span><span class="s-name">${esc(s.name)}</span><br><span class="s-meta">${s.archived ? `<span class="archived">Archived</span>` : isSolo(s) ? `<span class="pill-app">Practice app</span>${s.coaching_request_at ? " · wants coaching" : ""}` : esc(s.grp || "")}${s.program && !isSolo(s) ? " · " + esc(s.program) : ""}</span></span>
+          <span><span class="s-name">${esc(s.name)}</span><br><span class="s-meta">${S.activity[s.id] && !s.archived ? `<span class="s-act">${esc(ACT_LABEL[S.activity[s.id].type] || "Posted")} · ${esc(ago(S.activity[s.id].at))}</span><br>` : ""}${s.archived ? `<span class="archived">Archived</span>` : isSolo(s) ? `<span class="pill-app">Practice app</span>${s.coaching_request_at ? " · wants coaching" : ""}` : esc(s.grp || "")}${s.program && !isSolo(s) ? " · " + esc(s.program) : ""}</span></span>
           <span class="hcp">${esc(s.handicap || "")}</span></button></li>`).join("")}</ul>
       <button class="btn primary" data-act="add-student">+ Add student</button>
       <div class="roster-foot"><button data-act="toggle-archived">${S.showArchived ? "Hide archived" : "Show archived"}</button><button data-act="signout">Sign out</button></div>
@@ -648,11 +653,12 @@ export function start(root, { onSignOut }) {
   root.onclick = async ev => {
     const tr = ev.target.closest("[data-trtype],[data-trn],[data-trholes],[data-trmetric]");
     if (tr && !tr.closest("#modalRoot")) { const d = tr.dataset; if (d.trtype) S.trend.type = d.trtype; if (d.trn) S.trend.n = +d.trn; if (d.trholes) S.trend.holes = d.trholes; if (d.trmetric) S.trend.metric = d.trmetric; render(); return; }
-    const t = ev.target.closest("[data-sid],[data-tab],[data-act],[data-edit],[data-filter],[data-view],[data-remind],[data-delnote],[data-cweek]");
+    const t = ev.target.closest("[data-sid],[data-tab],[data-act],[data-edit],[data-filter],[data-sort],[data-view],[data-remind],[data-delnote],[data-cweek]");
     if (!t || t.closest("#modalRoot")) return;
     if (t.dataset.sid) { S.tab = "overview"; await openStudent(t.dataset.sid); return; }
     if (t.dataset.view) { await openCheckin(); return; }
     if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
+    if (t.dataset.sort) { S.sort = t.dataset.sort; try { localStorage.setItem("sph.coachSort", S.sort); } catch {} render(); return; }
     if (t.dataset.tab) { S.tab = t.dataset.tab; S.planWeek = null; render(); return; }
     if (t.dataset.cweek != null) { S.planWeek = +t.dataset.cweek === 0 ? null : addDays(S.planWeek || weekStartOf(), +t.dataset.cweek); render(); return; }
     if (t.dataset.remind) { const s = S.students.find(x => x.id === t.dataset.remind); if (s) await copy(reminderText(s)); return; }
