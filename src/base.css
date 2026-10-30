@@ -150,3 +150,5 @@ a{color:var(--pine)}
 .pat-key .k.ok{border:2.5px solid var(--pine);background:var(--surface)}
 .pat-key .k.poor{background:var(--a3)}
 .pat-key .k.avg{width:auto;height:auto;border-radius:0;font-style:normal;font-weight:700;color:var(--ink);line-height:1}
+
+.privacy-link{align-self:center;font-size:12px;color:var(--ink-3);text-decoration:underline;text-underline-offset:2px}

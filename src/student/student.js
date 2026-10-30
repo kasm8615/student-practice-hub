@@ -936,7 +936,8 @@ export function start(root, { students, onSignOut }) {
           ${S.profile?.coaching_request_at ? "" : `<button class="menu-item" data-act="coach-ask">Work with Karina<span>›</span></button>`}` : ""}
         <p>Tip: add this app to your home screen. On iPhone, tap Share, then "Add to Home Screen".</p>
         <button class="btn" data-act="signout">Sign out</button><button class="btn" data-close="1">Close</button>
-        ${isSolo() ? `<button class="linkbtn danger-link" data-act="del-account">Delete my account and all my data</button>` : ""}`);
+        ${isSolo() ? `<button class="linkbtn danger-link" data-act="del-account">Delete my account and all my data</button>` : ""}
+        <a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a>`);
     }
     if (sh.kind === "coach-ask") {
       return wrap("Work with Karina", `<h2>Work with Karina</h2>
