@@ -161,3 +161,16 @@ What Karina sees:
 ## Update 8: student list sorted by latest upload
 
 Supabase SQL Editor → run `supabase/update-8.sql` (no values to replace). Karina's student list then shows the student who posted most recently at the top, with what they posted and when ("Swing video · 2 hours ago"). Karina's own posts don't count. A "Latest upload / A–Z" switch above the list changes the order; the app remembers the choice. Before the SQL is run, the list stays A–Z.
+
+## Update 9: tighter function permissions (already applied on Oct 30, 2026)
+
+`supabase/update-9.sql` was applied to the live database. Visitors who aren't signed in can't call any database function; signed-in users can call only the ones the app uses; trigger functions can't be called directly. Run it again only when setting up a brand-new database (after update 8).
+
+## Privacy page
+
+`public/privacy.html` is served at app.karinagolfcoaching.com/privacy.html and linked from the sign-in and sign-up screens, the student menu and the coach view. Update the "Last updated" date when it changes.
+
+## Before a newsletter send
+
+- Supabase → Authentication → Rate Limits: raise "emails sent per hour" to about 100.
+- Resend's free plan sends 100 emails a day; each new sign-up uses one.

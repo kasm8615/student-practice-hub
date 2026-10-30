@@ -37,6 +37,7 @@ export function showSignIn(root, onSignedIn) {
         <button class="big" type="submit" ${busy ? "disabled" : ""}>${busy ? "Sending…" : "Get my sign-in code"}</button>
         <p class="hint">We'll email you a 6-digit code. No password to remember. Your stats stay private unless you tick the box above.</p>
         <button class="linkbtn" type="button" id="toSignin">Already have an account? Sign in</button>
+        <a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
       </form>`
     });
     root.querySelector("#j-name").focus();
@@ -72,6 +73,7 @@ export function showSignIn(root, onSignedIn) {
         <button class="big" type="submit" ${busy ? "disabled" : ""}>${busy ? "Sending…" : "Send my code"}</button>
         <p class="hint">Use the email Karina has on file. Parents of junior players: use your own email.</p>
         ${join ? `<button class="linkbtn" type="button" id="toJoin">New here? Sign up</button>` : ""}
+        <a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
       </form>`
     });
     const tj = root.querySelector("#toJoin"); if (tj) tj.onclick = () => { mode = "join"; error = ""; joinScreen(); };

@@ -149,7 +149,7 @@ export function start(root, { onSignOut }) {
           <span><span class="s-name">${esc(s.name)}</span><br><span class="s-meta">${S.activity[s.id] && !s.archived ? `<span class="s-act">${esc(ACT_LABEL[S.activity[s.id].type] || "Posted")} · ${esc(ago(S.activity[s.id].at))}</span><br>` : ""}${s.archived ? `<span class="archived">Archived</span>` : isSolo(s) ? `<span class="pill-app">Practice app</span>${s.coaching_request_at ? " · wants coaching" : ""}` : esc(s.grp || "")}${s.program && !isSolo(s) ? " · " + esc(s.program) : ""}</span></span>
           <span class="hcp">${esc(s.handicap || "")}</span></button></li>`).join("")}</ul>
       <button class="btn primary" data-act="add-student">+ Add student</button>
-      <div class="roster-foot"><button data-act="toggle-archived">${S.showArchived ? "Hide archived" : "Show archived"}</button><button data-act="signout">Sign out</button></div>
+      <div class="roster-foot"><button data-act="toggle-archived">${S.showArchived ? "Hide archived" : "Show archived"}</button><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a><button data-act="signout">Sign out</button></div>
     </aside>`;
   }
   function unreadCount() {
