@@ -4,7 +4,7 @@
 //   app: { res: ["G"] or e.g. ["S","R"], club, yds },                     the shot into the green (par 3 tee shot)
 //   sg:  { kind: "chip"|"bunker", shots, land: "on"|"short"|"long", out: true|false } }  when the green was missed
 
-export const CLUBS = ["Driver", "3 wood", "5 wood", "Hybrid", "4 iron", "5 iron", "6 iron", "7 iron", "8 iron", "9 iron", "PW", "GW", "SW", "LW"];
+export const CLUBS = ["Driver", "3 wood", "5 wood", "2 hybrid", "3 hybrid", "Hybrid", "5 hybrid", "2 iron", "3 iron", "4 iron", "5 iron", "6 iron", "7 iron", "8 iron", "9 iron", "PW", "GW", "SW", "LW"];
 const has = v => v !== "" && v != null && !isNaN(+v);
 const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
 

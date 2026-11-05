@@ -657,7 +657,7 @@ export function start(root, { students, onSignOut }) {
     const avg = k => { const v = e18.filter(x => x[k] !== "" && x[k] != null && !isNaN(+x[k])).map(x => +x[k]); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : "–"; };
     return top("My rounds", S.profile?.name || "") + `<main class="s-content">
       <div class="stats"><div><b>${avg("score")}</b><small>Avg score (18)</small></div><div><b>${avg("putts")}</b><small>Avg putts</small></div><div><b>${avg("gir")}</b><small>Avg greens</small></div></div>
-      ${S.live ? `<section class="card live-resume"><h2>Round in progress</h2><p style="margin:0"><b>${esc(S.live.course || "Your round")}</b> · ${S.live.mode === "full" ? "Full" : "Quick"} · ${liveThru()}</p>
+      ${S.live ? `<section class="card live-resume"><h2>${S.live.editId ? "Editing a round" : "Round in progress"}</h2><p style="margin:0"><b>${esc(S.live.course || "Your round")}</b> · ${S.live.mode === "full" ? "Full" : "Quick"} · ${liveThru()}</p>
         <div class="row2"><button class="btn" data-act="live-discard">Discard</button><button class="btn primary" data-act="live-resume">Resume</button></div></section>` : ""}
       ${S.logOpen ? logForm() : `<button class="btn primary" data-act="live-new">⛳ Track a round hole by hole</button><button class="btn" data-act="log">Enter totals only</button>`}
       
@@ -800,12 +800,13 @@ export function start(root, { students, onSignOut }) {
     const L = S.live, h = L.card[L.cur], full = L.mode === "full";
     const b = (path, val, label, on, cls = "") => `<button type="button" class="pick-btn ${cls}" data-lv="${path}" data-val="${esc(val)}" aria-pressed="${!!on}">${label}</button>`;
     const sec = (title, inner) => `<div class="lv-sec"><h3 class="sh3">${title}</h3>${inner}</div>`;
-    const clubSel = (path, cur) => `<select class="lv-club" data-lvsel="${path}" aria-label="Club"><option value="">Club</option>${CLUBS.map(c => `<option ${c === cur ? "selected" : ""}>${c}</option>`).join("")}</select>`;
+    const liveClubs = cur => sortClubs([...new Set([...CLUBS, ...myBag().filter(c => c.on !== false && c.club).map(c => c.club), ...(cur ? [cur] : [])])]);
+    const clubSel = (path, cur) => `<select class="lv-club" data-lvsel="${path}" aria-label="Club"><option value="">Club</option>${liveClubs(cur).map(c => `<option ${c === cur ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
     const missedGreen = (h.app.res || []).length && !h.app.res.includes("G");
     const scores = [h.par - 2, h.par - 1, h.par, h.par + 1, h.par + 2, h.par + 3].filter(v => v >= 1);
     const names = { [-2]: h.par === 3 ? "Ace" : "Eagle", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Double", 3: "Triple" };
     const t = totals(L.card);
-    return `<header class="lv-top"><button class="linkbtn" data-act="live-leave">‹ Rounds</button><span>${esc(L.course || "Round")} · ${t.holes ? `${t.score - t.par >= 0 ? "+" : ""}${t.score - t.par} thru ${t.holes}` : "Hole 1"}</span></header>
+    return `<header class="lv-top"><button class="linkbtn" data-act="live-leave">‹ Rounds</button><span>${L.editId ? "Editing · " : ""}${esc(L.course || "Round")} · ${t.holes ? `${t.score - t.par >= 0 ? "+" : ""}${t.score - t.par} thru ${t.holes}` : "Hole 1"}</span></header>
       <main class="s-content lv">
       <div class="lv-strip">${L.card.map((x, i) => `<button data-lvgo="${i}" class="${i === L.cur ? "cur" : ""} ${x.score != null ? "done" : ""}" aria-label="Hole ${x.n}">${x.n}${x.score != null ? `<small>${x.score}</small>` : ""}</button>`).join("")}</div>
       <section class="card lv-card">
@@ -817,10 +818,10 @@ export function start(root, { students, onSignOut }) {
           <p class="bag-hint" id="bagHint">${esc(bagHint(h.app.yds))}</p>
           <div class="pick">${b("app", "G", "On the green", h.app.res.includes("G"), "good")}${[["S", "Short"], ["Lg", "Long"], ["L", "Left"], ["R", "Right"]].map(([v, l]) => b("app", v, l, h.app.res.includes(v))).join("")}</div>
           <p class="muted">Missed? Tap up to two, e.g. Short + Right.</p>`) : ""}
-        ${full && missedGreen ? sec("Around the green", `<div class="pick">${b("sg.kind", "chip", "Chip / pitch", h.sg.kind === "chip")}${b("sg.kind", "bunker", "Bunker", h.sg.kind === "bunker")}</div>
+        ${full && missedGreen ? sec("Around the green", `<div class="pick">${b("sg.kind", "chip", "Chip / pitch", h.sg.kind === "chip")}${b("sg.kind", "bunker", "Bunker", h.sg.kind === "bunker")}${b("sg.kind", "putt", "Putted from off the green", h.sg.kind === "putt")}</div>
           ${h.sg.kind === "chip" ? `<div class="pick">${b("sg.land", "on", "Hit my landing spot", h.sg.land === "on", "good")}${b("sg.land", "short", "Landed short", h.sg.land === "short")}${b("sg.land", "long", "Landed past it", h.sg.land === "long")}</div>`
-            : `<div class="pick">${b("sg.out", "yes", "Out in one", h.sg.out === true, "good")}${b("sg.out", "no", "Took more than one", h.sg.out === false)}</div>`}
-          <div class="lv-row"><span>Shots to get on the green</span><span class="stepper sm"><button type="button" data-lvstep="sg.shots" data-d="-1">−</button><output>${h.sg.shots}</output><button type="button" data-lvstep="sg.shots" data-d="1">+</button></span></div>`) : ""}
+            : h.sg.kind === "bunker" ? `<div class="pick">${b("sg.out", "yes", "Out in one", h.sg.out === true, "good")}${b("sg.out", "no", "Took more than one", h.sg.out === false)}</div>` : ""}
+          ${h.sg.kind === "putt" ? "" : `<div class="lv-row"><span>Shots to get on the green</span><span class="stepper sm"><button type="button" data-lvstep="sg.shots" data-d="-1">−</button><output>${h.sg.shots}</output><button type="button" data-lvstep="sg.shots" data-d="1">+</button></span></div>`}`) : ""}
         ${sec("Putts", `${full ? `<div class="lv-row"><label>First putt <input class="lv-num" data-lvin="fp" inputmode="numeric" value="${esc(h.fp)}" placeholder="ft"></label></div>` : ""}<div class="pick">${[0, 1, 2, 3, 4].map(v => b("putts", v, v, h.putts === v)).join("")}</div>`)}
         ${sec("Penalties & trouble", `<div class="lv-row"><span>Penalty strokes</span><span class="stepper sm"><button type="button" data-lvstep="pen" data-d="-1">−</button><output>${h.pen}</output><button type="button" data-lvstep="pen" data-d="1">+</button></span></div>
           ${full && h.pen > 0 ? `<div class="pick">${b("penFrom", "tee", "Off the tee", h.penFrom === "tee")}${b("penFrom", "app", "On the approach", h.penFrom === "app")}${b("penFrom", "other", "Other", h.penFrom === "other")}</div>` : ""}
@@ -838,7 +839,7 @@ export function start(root, { students, onSignOut }) {
         <div class="mini-stats">${[["Fairways", t.fairways], ["Up & downs", t.updown], ["Penalties", t.penalties], ["3-putts", t.threeputts]].filter(([, v]) => v !== "").map(([k, v]) => `<span class="mini-stat">${k}: <b>${esc(v)}</b></span>`).join("")}</div></section>
       ${lines.length ? `<section class="card"><h2>Your patterns</h2>${lines.map(([k, v]) => `<p class="pat"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</section>` : ""}
       <form id="liveForm" class="card" novalidate><div class="field"><label for="lv-notes">How did it go?</label><textarea id="lv-notes" placeholder="e.g. Felt rushed after the bad hole on 12. Putting felt good.">${esc(L.notes || "")}</textarea></div>
-        <button class="btn primary" type="submit">Save round</button><button type="button" class="btn" data-act="live-back">Back to the holes</button></form></main>`;
+        <button class="btn primary" type="submit">${L.editId ? "Save changes" : "Save round"}</button><button type="button" class="btn" data-act="live-back">Back to the holes</button></form></main>`;
   }
   function liveScreen() { return S.liveSetup ? liveSetupHtml() : !S.live ? roundsScreen() : S.live.finishing ? liveFinishHtml() : liveHtml(); }
   function setPath(obj, path, val) { const k = path.split("."); let o = obj; k.slice(0, -1).forEach(x => { o = o[x]; }); o[k[k.length - 1]] = val; }
@@ -876,11 +877,12 @@ export function start(root, { students, onSignOut }) {
     const d = { date: L.date || today(), event: L.event, course: L.course, holes: t.holes === 18 ? "18" : t.holes === 9 ? "9" : String(t.holes), holes_played: t.holes, score: t.score, putts: t.putts, fairways: t.fairways, gir: t.gir, updown: t.updown,
       penalties: t.penalties, threeputts: t.threeputts, doubles: t.doubles, par: t.par, notes, mode: L.mode, card, patterns: patterns(card) };
     try { if (L.course) localStorage.setItem("sph.pars." + L.course.trim().toLowerCase(), JSON.stringify(Object.fromEntries(L.card.map(h => [h.n, h.par])))); } catch {}
+    const editing = L.editId ? S.entries.find(e => e.id === L.editId) : null;
     let saved = null;
-    const ok = await run(async () => { saved = await api.addEntry(S.sid, "stat", d); }, "Round saved");
+    const ok = await run(async () => { saved = editing ? await api.updateEntry(editing, d) : await api.addEntry(S.sid, "stat", d); }, editing ? "Round updated" : "Round saved");
     if (!ok) return;
     draft.clear(liveKey()); clearDrafts("liveForm"); S.live = null; S.screen = "rounds";
-    if (saved) { S.sheet = { kind: "round", id: saved.id }; render(); if (S.aiAvailable) reviewRound(saved.id); } else render();
+    if (saved) { S.sheet = { kind: "round", id: saved.id }; render(); if (S.aiAvailable && !editing) reviewRound(saved.id); } else render();
   }
 
   function logForm() {
@@ -956,7 +958,7 @@ export function start(root, { students, onSignOut }) {
         ${r.patterns ? `<div class="pats"><h3 class="sh3">Your patterns</h3>${patternLines(r.patterns).map(([k, v]) => `<p class="pat"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</div>` : ""}
         ${Array.isArray(r.card) ? cardTable(r.card) : ""}
         ${reviewHtml(r)}
-        ${r.author === "student" ? `<button class="btn danger" data-act="del-round">Delete round</button>` : ""}<button class="btn" data-close="1">Close</button>`);
+        ${r.author === "student" && Array.isArray(r.card) ? `<button class="btn" data-act="edit-round">Edit round</button>` : ""}${r.author === "student" ? `<button class="btn danger" data-act="del-round">Delete round</button>` : ""}<button class="btn" data-close="1">Close</button>`);
     }
     if (sh.kind === "session") {
       const x = S.entries.find(e => e.id === sh.id);
@@ -1235,6 +1237,13 @@ export function start(root, { students, onSignOut }) {
       S.bagDraft = bag; keepBag(); toast("Estimated. Now fix any club you know better, then Save."); render(); return;
     }
     if (act === "bag-add") { S.bagDraft.push({ club: "", carry: "", total: "", on: true }); render(); root.querySelector(".bag-row:last-of-type .bag-name")?.focus(); return; }
+    if (act === "edit-round") {
+      const r = S.entries.find(e => e.id === S.sheet?.id);
+      if (!r || !Array.isArray(r.card)) return;
+      if (S.live) { toast("Finish or discard your round in progress first."); return; }
+      S.live = { editId: r.id, course: r.course || "", date: r.date || today(), event: r.event || "Casual", mode: r.mode || "full", cur: 0, card: r.card.map(h => ({ ...newHole(h.n, h.par), ...h })) };
+      S.sheet = null; S.screen = "live"; saveLive(); render(); window.scrollTo(0, 0); return;
+    }
     if (act === "live-new") { if (S.live) { toast("Finish or discard your round in progress first."); return; } S.liveSetup = { course: "", date: today(), event: "Casual", holes: "18", mode: "quick" }; S.screen = "live"; S.sheet = null; render(); window.scrollTo(0, 0); return; }
     if (act === "live-start") {
       const st = S.liveSetup; st.course = root.querySelector("#lv-course").value.trim(); st.date = root.querySelector("#lv-date").value || today(); st.event = root.querySelector("#lv-event").value;
