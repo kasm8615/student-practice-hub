@@ -6,6 +6,7 @@ import { benchmarkTable, myAverages } from "../lib/benchmarks.js";
 import { GOAL_PERIODS, GOAL_FIELDS } from "../lib/goals.js";
 import { GAMES } from "../lib/scenarios.js";
 import { patternLines } from "../lib/roundstats.js";
+import { roundSG, sgHtml } from "../lib/strokesgained.js";
 import { carried, gapNotes, swingsFor } from "../lib/bag.js";
 import { summarize as focusSummary, bestFocuses, KIND_LABEL } from "../lib/focus.js";
 import { shotsFor, clubsIn, stats as patStats, missLine, depthLine, poorLine, tips as patTips, plotSvg, legendHtml, courseSummary } from "../lib/pattern.js";
@@ -602,6 +603,7 @@ export function start(root, { onSignOut }) {
         return !!(e ? await write(api.updateEntry(e, d), "Saved") : await write(api.addEntry(S.sel, type, d), T.one + " added"));
       },
       extra: (e && e.patterns ? `<div class="box"><h4>Patterns (${esc(e.mode === "full" ? "full" : "quick")} hole-by-hole)</h4>${patternLines(e.patterns).map(([k, v]) => `<p style="margin-top:4px"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</div>` : "")
+        + (e && Array.isArray(e.card) && e.mode === "full" ? `<div class="box">${sgHtml(roundSG(e.card), esc)}</div>` : "")
         + (e && Array.isArray(e.card) ? holesTable(e.card) : "")
         + (e && e.review ? `<div class="box rv-box"><h4>✨ AI round review (what the student saw)</h4>${reviewBody(e.review)}</div>` : ""),
       onDelete: e ? () => write(api.deleteEntry(e.id), "Deleted") : null
