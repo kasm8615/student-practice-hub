@@ -1,15 +1,15 @@
 // Hole-by-hole round data: totals and miss patterns.
-// A hole: { n, par, score, putts, fp (first putt, ft), pen, penFrom, rec,
+// A hole: { n, par, yds (hole length), score, putts, fp (first putt, ft), pen, penFrom, rec,
 //   tee: { res: "fw"|"L"|"R", start: "curve"|"off", club },            par 4/5 only
 //   app: { res: ["G"] or e.g. ["S","R"], club, yds },                     the shot into the green (par 3 tee shot)
-//   sg:  { kind: "chip"|"bunker", shots, land: "on"|"short"|"long", out: true|false } }  when the green was missed
+//   sg:  { kind: "chip"|"bunker"|"putt", yds, shots, land: "on"|"short"|"long", out: true|false } }  when the green was missed
 
 export const CLUBS = ["Driver", "3 wood", "5 wood", "2 hybrid", "3 hybrid", "Hybrid", "5 hybrid", "2 iron", "3 iron", "4 iron", "5 iron", "6 iron", "7 iron", "8 iron", "9 iron", "PW", "GW", "SW", "LW"];
 const has = v => v !== "" && v != null && !isNaN(+v);
 const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
 
 export function newHole(n, par = 4) {
-  return { n, par, score: null, putts: null, fp: "", pen: 0, penFrom: "", rec: false, tee: { res: "", start: "", club: "Driver" }, app: { res: [], club: "", yds: "" }, sg: { kind: "chip", shots: 1, land: "", out: null } };
+  return { n, par, yds: "", score: null, putts: null, fp: "", pen: 0, penFrom: "", rec: false, tee: { res: "", start: "", club: "Driver" }, app: { res: [], club: "", yds: "" }, sg: { kind: "chip", shots: 1, land: "", out: null, yds: "" } };
 }
 
 const played = holes => holes.filter(h => has(h.score));

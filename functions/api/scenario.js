@@ -45,6 +45,7 @@ Rules:
 - Only use facts in the data. If a stat is missing, don't guess it; you can suggest tracking it next time.
 - Never mention injuries, medical advice or equipment purchases.
 - If hole-by-hole data and patterns are provided, use them: name the miss pattern off the tee (left/right, and whether misses started on target and curved, or started off target and stayed there), approach misses by direction, club and distance, landing-spot accuracy on chips, bunker results, first-putt distances and 3-putts, and where penalties came from. Describe the pattern; leave the swing fix to Karina (e.g. "Bring this pattern to your next lesson").
+- If strokes_gained is provided (vs a PGA Tour baseline, so negative is normal for amateurs), use it to say which category cost the most strokes compared with the others. Don't treat the negative total as bad news.
 - headline: one sentence summing up the round.
 - good: 1–2 short bullets. cost: 1–3 short bullets on where strokes were lost, with numbers when available (e.g. "3 three-putts ≈ 3 strokes").
 - focus: one sentence, the single most important thing to practice this week.
@@ -102,7 +103,7 @@ async function review(p, env) {
   const games = (Array.isArray(p.games) ? p.games : []).slice(0, 60).map(g => ({ id: clip(g.id, 40), name: clip(g.name, 80), place: clip(g.place, 20), helps: (g.helps || []).slice(0, 5).map(h => clip(h, 20)) }));
   const pl = p.player || {};
   const user = JSON.stringify({
-    round, patterns: p.patterns || null, holes: Array.isArray(p.holes) ? p.holes.slice(0, 18) : null, previous_rounds: (Array.isArray(p.previous) ? p.previous : []).slice(0, 5), target_score: +p.target || null, benchmark_for_target: p.benchmark || null,
+    round, patterns: p.patterns || null, strokes_gained: p.strokes_gained && typeof p.strokes_gained === "object" ? p.strokes_gained : null, holes: Array.isArray(p.holes) ? p.holes.slice(0, 18) : null, previous_rounds: (Array.isArray(p.previous) ? p.previous : []).slice(0, 5), target_score: +p.target || null, benchmark_for_target: p.benchmark || null,
     player: { handicap: clip(pl.handicap, 10), group: clip(pl.group, 10), goals: Object.fromEntries(Object.entries(pl.goals || {}).slice(0, 4).map(([k, v]) => [clip(k, 10), clip(v, 200)])), current_drills: (Array.isArray(pl.drills) ? pl.drills : []).slice(0, 6).map(d => clip(d, 60)), club_carries: (Array.isArray(pl.club_carries) ? pl.club_carries : []).slice(0, 40).map(c => clip(c, 30)) },
     game_library: games
   });
